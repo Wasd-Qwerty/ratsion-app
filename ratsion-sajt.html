@@ -29,11 +29,19 @@ textarea{ resize:vertical; }
 </style>
 <div id="app" class="wrap"></div>
 <script>
-const C = {
+const C_LIGHT = {
   paper: "#F6F2E9", card: "#FFFFFF", ink: "#14130F", mute: "#8A8578",
-  line: "#E4DED0", green: "#2E6B4F", greenSoft: "#E7F0EA",
-  amber: "#E9A417", amberSoft: "#FBF0D8", red: "#B4442B",
+  line: "#E4DED0", line2: "#D8D2C4", green: "#2E6B4F", greenSoft: "#E7F0EA",
+  amber: "#E9A417", amberSoft: "#FBF0D8", red: "#B4442B", dangerSoft: "#FBEAE5",
+  cardShadow: "0 2px 10px rgba(20,19,15,0.05)",
 };
+const C_DARK = {
+  paper: "#16140E", card: "#221E16", ink: "#F2EEE2", mute: "#A59E8C",
+  line: "#353128", line2: "#46402E", green: "#66B389", greenSoft: "#233329",
+  amber: "#EDB53E", amberSoft: "#37301C", red: "#E2805E", dangerSoft: "#3A241E",
+  cardShadow: "0 2px 12px rgba(0,0,0,0.38)",
+};
+let C = C_LIGHT;
 /* ---------------- продукты ---------------- */
 // a — аллергены (жёсткое исключение), цены в тенге, Алматы
 const P = {
@@ -2265,7 +2273,7 @@ let state = {
     budget: 45000, mode: "diet", store: "magnum",
     meals: { breakfast: true, lunch: true, snack: true, dinner: true, drink: true },
     drinksPerDay: 2, snacksPerDay: 1,
-    favorites: [], banned: [], pantry: [], pantryQty: {}, photos: {}, customProducts: [], onboarded: false,
+    favorites: [], banned: [], pantry: [], pantryQty: {}, photos: {}, customProducts: [], onboarded: false, theme: "light",
     allergens: [], equip: ["Плита", "Духовка", "Микроволновка", "Блендер"],
     eaters: [
       { id: "e1", name: "Я", child: false, sex: "f", age: 32, height: 159, weight: 57.5, activity: "mid", tk: 1300, tb: 90, tj: 45, tu: 145, dislikes: {} },
@@ -2328,6 +2336,14 @@ function load() {
 
 /* ---------- сеттеры ---------- */
 function setCfg(cfg) { state.cfg = cfg; persist(); render(); }
+function applyTheme() {
+  const t = (state.cfg && state.cfg.theme) || "light";
+  let dark = t === "dark";
+  if (t === "auto") { try { dark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches); } catch (_) {} }
+  C = dark ? C_DARK : C_LIGHT;
+  try { if (document.body) { document.body.style.background = C.paper; document.body.style.color = C.ink; } } catch (_) {}
+}
+function setTheme(t) { state.cfg = { ...state.cfg, theme: t }; persist(); applyTheme(); render(); }
 function setWk(patch) { state.week = { ...state.week, ...patch }; persist(); render(); }
 function setPrices(next) { state.basePrices = typeof next === "function" ? next(state.basePrices) : next; persist(); render(); }
 function setCustom(next) { state.custom = typeof next === "function" ? next(state.custom) : next; persist(); render(); }
@@ -2677,7 +2693,7 @@ function BudgetBar(spent, budget) {
   const over = spent > budget;
   return h("div", { style: {
     borderRadius: "16px", padding: "16px",
-    background: over ? "#FBEAE5" : C.amberSoft, border: `1.5px solid ${over ? C.red : "#F0DDB4"}`,
+    background: over ? C.dangerSoft : C.amberSoft, border: `1.5px solid ${over ? C.red : "#F0DDB4"}`,
   } },
     h("div", { style: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "12px" } },
       h("div", null,
@@ -2700,7 +2716,7 @@ function BudgetBar(spent, budget) {
   );
 }
 function card(children, extra) {
-  return h("div", { style: { background: C.card, border: `1px solid ${C.line}`, borderRadius: "16px", ...(extra || {}) } }, children);
+  return h("div", { style: { background: C.card, border: `1px solid ${C.line}`, borderRadius: "16px", boxShadow: C.cardShadow, ...(extra || {}) } }, children);
 }
 function eyebrow(text, extra) {
   return h("div", { style: {
@@ -2880,7 +2896,7 @@ function screenBuyFix(D) {
     (swapTo ? h("div", { style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: C.greenSoft, border: `1px solid ${C.green}` } },
         h("div", { style: { fontSize: "13px", color: C.green, marginBottom: "8px" } }, "Сейчас заменено на: " + h("b", null, P[swapTo].n)),
         h("button", { onClick: unSwap, style: { fontSize: "13px", fontWeight: 700, color: C.green } }, "↩︎ Вернуть «" + pr.n.toLowerCase() + "»")) : null),
-    (skipped ? h("div", { style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: "#FBEAE5", border: `1px solid ${C.red}` } },
+    (skipped ? h("div", { style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: C.dangerSoft, border: `1px solid ${C.red}` } },
         h("div", { style: { fontSize: "13px", color: C.red, marginBottom: "8px" } }, "Сейчас: не покупаем на этой неделе."),
         h("button", { onClick: unSkip, style: { fontSize: "13px", fontWeight: 700, color: C.red } }, "↩︎ Вернуть в список")) : null),
     (!skipped ? h("div", { style: { marginBottom: "18px" } }, Btn("🚫 Не покупать на этой неделе", doSkip, "ghost")) : null),
@@ -2972,7 +2988,7 @@ function screenRecipe(D) {
       fav ? "❤️ Любимое" : "♡ В любимые"),
     h("button", { onClick: () => toggleBan(d.id), style: {
       flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600,
-      background: banned ? "#FBEAE5" : C.card, color: banned ? C.red : C.mute, border: `1.5px solid ${banned ? C.red : C.line}` } },
+      background: banned ? C.dangerSoft : C.card, color: banned ? C.red : C.mute, border: `1.5px solid ${banned ? C.red : C.line}` } },
       banned ? "🚫 Скрыто" : "🚫 Не предлагать"));
   const banNote = banned ? h("div", { style: { fontSize: "12px", marginTop: "-10px", marginBottom: "16px", color: C.red } }, "Не будет попадать в подбор. На этой неделе останется, пока не нажмёте «Пересобрать».") : null;
 
@@ -3174,7 +3190,7 @@ function screenFreeRecipe(D) {
     : null;
   const favRow = h("div", { style: { display: "flex", gap: "8px", marginBottom: "20px" } },
     h("button", { onClick: () => toggleFav(d.id), style: { flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600, background: fav ? C.greenSoft : C.card, color: fav ? C.green : C.mute, border: `1.5px solid ${fav ? C.green : C.line}` } }, fav ? "❤️ Любимое" : "♡ В любимые"),
-    h("button", { onClick: () => toggleBan(d.id), style: { flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600, background: banned ? "#FBEAE5" : C.card, color: banned ? C.red : C.mute, border: `1.5px solid ${banned ? C.red : C.line}` } }, banned ? "🚫 Скрыто" : "🚫 Не предлагать"));
+    h("button", { onClick: () => toggleBan(d.id), style: { flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600, background: banned ? C.dangerSoft : C.card, color: banned ? C.red : C.mute, border: `1.5px solid ${banned ? C.red : C.line}` } }, banned ? "🚫 Скрыто" : "🚫 Не предлагать"));
   return h("div", { class: "inner" },
     backLink(back[0], back[1]),
     h("div", { style: { fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.14em", color: C.green, marginBottom: "8px" } }, MEALS[d.m] + " · " + eq),
@@ -3612,7 +3628,7 @@ function screenPlan(D) {
   const storeSum = (st) => planTotal / k * st.k;
   return [
     state.storageBlocked
-      ? h("div", { onClick: () => setTab("settings"), style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: "#FBEAE5", border: `1.5px solid ${C.red}`, cursor: "pointer" } },
+      ? h("div", { onClick: () => setTab("settings"), style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: C.dangerSoft, border: `1.5px solid ${C.red}`, cursor: "pointer" } },
           h("div", { style: { fontSize: "13.5px", fontWeight: 700, color: C.red, marginBottom: "2px" } }, "⚠️ Браузер не сохраняет данные"),
           h("div", { style: { fontSize: "12.5px", color: C.ink, lineHeight: 1.45 } }, "Откройте сайт, войдя в свой аккаунт Claude, — тогда настройки не будут теряться. Или сохраните копию: Настройки → «Сохранить мои данные». Нажмите, чтобы перейти."))
       : null,
@@ -3835,15 +3851,15 @@ function screenSettings(D) {
   const num = (e, field, label, fkey) => h("div", { style: { flex: 1 } },
     h("input", { type: "number", inputmode: "numeric", value: e[field] ?? "", placeholder: "—", "data-fkey": fkey,
       onInput: (ev) => setCfg({ ...cfg, eaters: cfg.eaters.map((x) => x.id === e.id ? { ...x, [field]: Number(ev.target.value) || 0 } : x) }),
-      style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.green}` } }),
-    h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, "✏️ " + label));
+      style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.line2}` } }),
+    h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, label));
 
   const targetField = (e, key, label) => {
     const mapped = key === "tk" ? "k" : key === "tb" ? "b" : key === "tj" ? "j" : "u";
     return h("div", { style: { flex: 1 } },
       h("input", { type: "number", inputmode: "numeric", value: e[key] ?? "", placeholder: String(targets({ ...e, [key]: 0 })[mapped]), "data-fkey": `eater-${e.id}-${key}`,
         onInput: (ev) => setCfg({ ...cfg, eaters: cfg.eaters.map((x) => x.id === e.id ? { ...x, [key]: Number(ev.target.value) || undefined } : x) }),
-        style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px 4px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.green}` } }),
+        style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px 4px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.line2}` } }),
       h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, label));
   };
 
@@ -3870,9 +3886,11 @@ function screenSettings(D) {
     h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "14px", borderRadius: "12px", padding: "8px 12px", marginBottom: "8px", background: C.greenSoft } },
       h("span", { style: { color: C.green } }, targets(e).manual ? "Своя цель" : "Расчётная норма"),
       h("span", { class: "disp", style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, targets(e).k + " ккал")),
-    h("div", { style: { display: "flex", gap: "6px" } },
-      [["tk", "ккал"], ["tb", "белки"], ["tj", "жиры"], ["tu", "углев."]].map(([key, l]) => targetField(e, key, l))),
-    h("div", { style: { fontSize: "11px", marginTop: "6px", color: C.mute } }, "Пусто — считаем по росту, весу и активности"),
+    h("details", { style: { marginTop: "2px" } },
+      h("summary", { style: { fontSize: "12px", fontWeight: 600, color: C.green, cursor: "pointer", listStyle: "none", padding: "2px 0" } }, "Задать КБЖУ вручную ›"),
+      h("div", { style: { display: "flex", gap: "6px", marginTop: "8px" } },
+        [["tk", "ккал"], ["tb", "белки"], ["tj", "жиры"], ["tu", "углев."]].map(([key, l]) => targetField(e, key, l))),
+      h("div", { style: { fontSize: "11px", marginTop: "6px", color: C.mute } }, "Пусто — считаем по росту, весу и активности")),
     (() => {
       const rec = recNorms(e);
       const apply = (t) => setCfg({ ...cfg, eaters: cfg.eaters.map((x) => x.id === e.id ? { ...x, tk: t.k, tb: t.b, tj: t.j, tu: t.u } : x) });
@@ -3939,7 +3957,7 @@ function screenSettings(D) {
   return [
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 16px" } }, "⚙️ Настройки"),
     h("button", { onClick: () => { state.onboard = 0; render(); }, style: { width: "100%", borderRadius: "14px", padding: "15px", marginBottom: "10px", fontSize: "15px", fontWeight: 700, background: C.green, color: "#fff", border: "none" } }, "✨ Пройти пошаговую настройку"),
-    h("div", { style: { borderRadius: "14px", padding: "14px 16px", marginBottom: "22px", background: state.storageBlocked ? "#FBEAE5" : C.amberSoft, border: `1.5px solid ${state.storageBlocked ? C.red : C.line}` } },
+    h("div", { style: { borderRadius: "14px", padding: "14px 16px", marginBottom: "22px", background: state.storageBlocked ? C.dangerSoft : C.amberSoft, border: `1.5px solid ${state.storageBlocked ? C.red : C.line}` } },
       h("div", { style: { fontSize: "13.5px", fontWeight: 700, marginBottom: "2px", color: state.storageBlocked ? C.red : C.ink } }, state.storageBlocked ? "⚠️ Браузер не сохраняет данные" : "💾 Сохранить мои данные"),
       h("div", { style: { fontSize: "12.5px", marginBottom: "12px", color: C.mute, lineHeight: 1.45 } }, state.storageBlocked ? "Настройки будут теряться при закрытии. Войдите в аккаунт Claude при открытии сайта — или сохраняйте копию кнопкой ниже и вставляйте обратно." : "Обычно всё сохраняется само. Но на всякий случай (смена телефона, очистка браузера) скопируйте копию и сохраните в Заметки."),
       h("button", { onClick: async () => { const ok = await copyText(backupText()); toast(ok ? "📋 Скопировано — вставьте и сохраните в Заметки" : "Не удалось скопировать"); }, style: { width: "100%", borderRadius: "12px", padding: "13px", fontSize: "14px", fontWeight: 700, background: C.green, color: "#fff", border: "none" } }, "📋 Скопировать мои данные")),
@@ -3952,6 +3970,11 @@ function screenSettings(D) {
             h("button", { onClick: () => doLogout(), style: { flex: 1, borderRadius: "12px", padding: "11px", fontSize: "13px", fontWeight: 700, background: C.card, color: C.red, border: `1.5px solid ${C.line}` } }, "Выйти")))
       : h("button", { onClick: () => { state.loginOpen = true; state.loginInput = ""; render(); }, style: { width: "100%", borderRadius: "14px", padding: "15px", marginBottom: "22px", fontSize: "15px", fontWeight: 700, textAlign: "center", background: C.green, color: "#fff", border: "none" } }, "📱 Войти по номеру — синхронизация телефонов"))
       : null,
+    eyebrow("Оформление"),
+    h("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } },
+      [["light", "Светлая"], ["dark", "Тёмная"], ["auto", "Авто"]].map(([v, l]) => h("button", { onClick: () => setTheme(v),
+        style: { flex: 1, minWidth: 0, borderRadius: "14px", padding: "12px 4px", fontSize: "14px", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", background: (cfg.theme || "light") === v ? C.green : C.card, color: (cfg.theme || "light") === v ? "#fff" : C.ink, border: `1.5px solid ${(cfg.theme || "light") === v ? C.green : C.line}` } }, l))),
+    h("div", { style: { fontSize: "12px", marginBottom: "24px", color: C.mute } }, "«Авто» подстроится под тему телефона (тёмная вечером)."),
     eyebrow("Режим подбора"),
     h("div", { style: { display: "flex", gap: "8px", marginBottom: "8px" } },
       [["normal", "Обычный"], ["diet", "Диетический"]].map(([v, l]) => h("button", { onClick: () => setCfg({ ...cfg, mode: v }),
@@ -4010,16 +4033,22 @@ function screenSettings(D) {
 }
 
 /* ---------- нижняя навигация + тост ---------- */
+const NAV_ICONS = {
+  plan: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
+  list: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5H5l2.2 11a1.2 1.2 0 0 0 1.2 1h8.4a1.2 1.2 0 0 0 1.2-.9L21 8H6"/></svg>',
+  prices: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V4.5A1.5 1.5 0 0 1 4.5 3h7.7a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.8" cy="7.8" r="1.2"/></svg>',
+  settings: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-6M4 11V3M12 21v-8M12 9V3M20 21v-4M20 13V3"/><path d="M2 15h4M10 9h4M18 17h4"/></svg>',
+};
 function nav(D) {
-  const items = [["plan", "📅", "Неделя"], ["list", "🛒", "Покупки"], ["prices", "🏷️", "Цены"], ["settings", "⚙️", "Настройки"]];
-  return h("div", { class: "navbar" },
+  const items = [["plan", "Неделя"], ["list", "Покупки"], ["prices", "Цены"], ["settings", "Настройки"]];
+  return h("div", { class: "navbar", style: { background: C.card, borderTop: `1px solid ${C.line}` } },
     h("div", { style: { margin: "0 auto", maxWidth: "448px", display: "flex", gap: "4px", padding: "6px 8px" } },
-      items.map(([key, icon, label]) => {
+      items.map(([key, label]) => {
         const on = state.tab === key;
         return h("button", { onClick: () => setTab(key),
-          style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "7px 0 9px", borderRadius: "14px", background: on ? C.greenSoft : "transparent", color: on ? C.green : C.mute } },
-          h("span", { style: { fontSize: "21px", lineHeight: 1, position: "relative", display: "inline-block", filter: on ? "none" : "grayscale(0.35)", opacity: on ? 1 : 0.85 } }, icon,
-            key === "prices" && D.stale > 0 ? h("span", { style: { position: "absolute", top: "-3px", right: "-7px", width: "8px", height: "8px", borderRadius: "9999px", background: C.amber, border: "1.5px solid " + C.paper } }) : null),
+          style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "8px 0 9px", borderRadius: "14px", background: on ? C.greenSoft : "transparent", color: on ? C.green : C.mute } },
+          h("span", { html: NAV_ICONS[key], style: { position: "relative", lineHeight: 0, display: "inline-block" } },
+            key === "prices" && D.stale > 0 ? h("span", { style: { position: "absolute", top: "-3px", right: "-7px", width: "8px", height: "8px", borderRadius: "9999px", background: C.amber, border: "1.5px solid " + C.card } }) : null),
           h("span", { style: { fontSize: "11px", fontWeight: on ? 800 : 600, letterSpacing: "0.01em" } }, label));
       })));
 }
@@ -4055,6 +4084,7 @@ function view() {
 }
 
 function render() {
+  applyTheme();
   const ae = document.activeElement;
   const fkey = ae && ae.dataset ? ae.dataset.fkey : null;
   let ss = null, se = null;
