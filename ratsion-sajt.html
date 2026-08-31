@@ -2256,7 +2256,7 @@ function h(tag, props, ...kids) {
 let state = {
   loaded: false, tab: "plan", recipe: null, editEater: null, draft: null,
   freeRecipe: null, uniqueOpen: false, have: {}, deck: null, surprise: false, onboard: null, priceSearch: "", planDay: null, haveSearch: "", storeOpen: false, pantrySearch: "", swap: null, swapSearch: "",
-  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false,
+  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false,
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
   cfg: {
     budget: 45000, mode: "diet", store: "magnum",
@@ -2944,7 +2944,30 @@ function screenRecipe(D) {
 }
 
 /* ---------- сюрприз-рецепт и «из моих продуктов» ---------- */
-function setFreeRecipe(v) { state.freeRecipe = v; state.uniqueOpen = false; render(); }
+function setFreeRecipe(v) { state.freeRecipe = v; state.uniqueOpen = false; state.favoritesOpen = false; render(); }
+function screenFavorites(D) {
+  const { ALL, dishCost } = D;
+  const favs = (state.cfg.favorites || []).map((id) => ALL.find((x) => x.id === id)).filter(Boolean);
+  return h("div", { class: "inner" },
+    backLink("← Неделя", () => { state.favoritesOpen = false; render(); }),
+    h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "❤️ Мои любимые"),
+    h("div", { style: { fontSize: "13px", marginBottom: "18px", color: C.mute } }, favs.length ? `${favs.length} ${favs.length === 1 ? "блюдо" : "блюд"} · нажмите, чтобы открыть рецепт` : ""),
+    favs.length
+      ? h("div", { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+          favs.map((d) => h("button", {
+            onClick: () => setFreeRecipe({ id: d.id, missing: [], back: "favorites" }),
+            style: { width: "100%", borderRadius: "16px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", background: C.card, border: `1px solid ${C.line}`, textAlign: "left" },
+          },
+            h("span", { style: { fontSize: "28px", flexShrink: 0 } }, d.ic),
+            h("span", { style: { flex: 1, minWidth: 0 } },
+              h("span", { style: { display: "block", fontSize: "15px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, d.n),
+              h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, `${MEALS[d.m]} · ${d.t} мин · ${money(dishCost(d))}/порц.`)),
+            h("span", { onClick: (e) => { e.stopPropagation(); toggleFav(d.id); }, style: { fontSize: "20px", flexShrink: 0, padding: "4px 6px" } }, "❤️"))))
+      : h("div", { style: { textAlign: "center", padding: "46px 20px", color: C.mute } },
+          h("div", { style: { fontSize: "46px", marginBottom: "12px" } }, "🤍"),
+          h("div", { style: { fontSize: "15px", lineHeight: 1.5 } }, "Пока пусто. Отмечайте блюда сердечком «♡ В любимые» в рецепте — они появятся здесь, и меню будет чаще их предлагать.")));
+}
+
 function rollSurprise(m, D) {
   const cfg = state.cfg, week = state.week;
   const avail = new Set([...(cfg.pantry || []), ...Object.keys(week.bought || {}).filter((k) => week.bought[k]), ...Object.keys(week.home || {}).filter((k) => week.home[k])]);
@@ -3028,6 +3051,8 @@ function screenFreeRecipe(D) {
     ? ["← К подбору", () => { state.freeRecipe = null; state.uniqueOpen = true; render(); }]
     : fr.back === "surprise"
     ? ["← Другой сюрприз", () => { state.freeRecipe = null; state.surprise = true; render(); }]
+    : fr.back === "favorites"
+    ? ["← Любимые", () => { state.freeRecipe = null; state.favoritesOpen = true; render(); }]
     : ["← Неделя", () => setFreeRecipe(null)];
   const fav = isFav(d.id), banned = isBanned(d.id);
   const eq = (d.eq && d.eq.length) ? d.eq.join(" · ") : "без техники";
@@ -3484,7 +3509,8 @@ function screenPlan(D) {
       h("span", { style: { color: (cfg.mode || "diet") === "diet" ? C.green : C.mute } }, ` · ${(cfg.mode || "diet") === "diet" ? "диета" : "обычный"}`)),
     h("div", { style: { display: "flex", gap: "16px", marginBottom: "14px", flexWrap: "wrap" } },
       h("button", { onClick: saveWeek, style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, "♡ Сохранить неделю"),
-      h("button", { onClick: () => shareMenu(D), style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, "⇪ Отправить меню")),
+      h("button", { onClick: () => shareMenu(D), style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, "⇪ Отправить меню"),
+      h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`)),
     h("div", { style: { display: "flex", gap: "10px", marginBottom: "14px" } },
       h("button", { onClick: () => { state.surprise = true; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.line}`, color: C.ink } }, "🎲 Сюрприз-рецепт"),
       h("button", { onClick: () => { state.uniqueOpen = true; state.deck = null; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.greenSoft, border: `1.5px solid ${C.green}`, color: C.green } }, "✨ Из моих продуктов")),
@@ -3873,6 +3899,7 @@ function view() {
   if (state.cook) return screenCook(D);
   if (state.pantryOpen) return screenPantry();
   if (state.swap) return screenSwap(D);
+  if (state.favoritesOpen) return screenFavorites(D);
   if (state.freeRecipe) return screenFreeRecipe(D);
   if (state.surprise) return screenSurprise(D);
   if (state.uniqueOpen) return screenUnique(D);
