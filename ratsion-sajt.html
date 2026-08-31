@@ -4180,7 +4180,7 @@ function applyDataBlob(s) {
     if (s.cfg.onboarded === undefined) state.cfg.onboarded = true;
     (state.cfg.customProducts || []).forEach((cp) => { if (cp && cp.id && !P[cp.id]) { P[cp.id] = { n: cp.n, u: cp.u || "шт", p: cp.p || 0, c: cp.c || "Моё", nu: cp.nu || [0, 0, 0, 0] }; } });
   }
-  if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
+  if (s.prices && s.pricesTouched) state.basePrices = { ...state.basePrices, ...s.prices };   // чужие цены восстанавливаем только если пользователь правил сам
   if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {}, ...s.week };
   if (s.custom) state.custom = s.custom;
   if (s.savedWeeks) state.savedWeeks = s.savedWeeks;
@@ -4199,16 +4199,19 @@ async function cloudInit() {
   const pr = await supaRPC("ratsion_get_prices", { p_edition: EDITION });
   if (!pr.ok) { state.cloud = false; return; }        // артефакт/офлайн — работаем локально
   state.cloud = true;
-  if (pr.data && !state.pricesTouched) {              // центральные цены, если пользователь не правил сам
+  let userEmpty = false;
+  if (state.phone) {                                  // сначала — данные аккаунта
+    const r = await supaRPC("ratsion_load", { p_phone: state.phone, p_edition: EDITION });
+    if (r.ok && r.data) applyDataBlob(r.data);
+    else if (r.ok && !r.data) userEmpty = true;
+  }
+  if (pr.data && !state.pricesTouched) {              // центральные (свежие) цены — если пользователь не правил цены сам
     const merged = { ...state.basePrices };
     for (const id in pr.data) { if (P[id]) merged[id] = { p: pr.data[id].p, updated: pr.data[id].updated || TODAY() }; }
     state.basePrices = merged;
+    state.pricePack = PRICE_PACK;
   }
-  if (state.phone) {
-    const r = await supaRPC("ratsion_load", { p_phone: state.phone, p_edition: EDITION });
-    if (r.ok && r.data) { applyDataBlob(r.data); try { localStorage.setItem(KEY, JSON.stringify(userDataBlob())); } catch (_) {} }
-    else if (r.ok && !r.data) { cloudSaveNow(); }     // в облаке пусто — заливаем локальное
-  }
+  if (state.phone) { if (userEmpty) cloudSaveNow(); try { localStorage.setItem(KEY, JSON.stringify(userDataBlob())); } catch (_) {} }
   render();
 }
 async function doLogin(phoneRaw) {
