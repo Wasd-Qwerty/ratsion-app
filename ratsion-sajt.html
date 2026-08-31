@@ -2259,7 +2259,7 @@ function h(tag, props, ...kids) {
 let state = {
   loaded: false, tab: "plan", recipe: null, editEater: null, draft: null,
   freeRecipe: null, uniqueOpen: false, have: {}, deck: null, surprise: false, onboard: null, priceSearch: "", planDay: null, haveSearch: "", storeOpen: false, pantrySearch: "", swap: null, swapSearch: "",
-  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "", phone: null, cloud: false, loginOpen: false, loginInput: "",
+  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "", phone: null, cloud: false, loginOpen: false, loginInput: "", buyFix: null, buyFixSearch: "",
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
   cfg: {
     budget: 45000, mode: "diet", store: "magnum",
@@ -2274,7 +2274,7 @@ let state = {
     ],
   },
   basePrices: freshPrices(),
-  week: { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {} },
+  week: { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} },
   custom: [],
 };
 let msgTimer = null;
@@ -2311,7 +2311,7 @@ function load() {
       if (s.cfg.onboarded === undefined) state.cfg.onboarded = true;   // у старых пользователей уже всё настроено — мастер не показываем
     }
     if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
-    if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, ...s.week };
+    if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {}, ...s.week };
     if (s.custom) state.custom = s.custom;
     if (s.savedWeeks) state.savedWeeks = s.savedWeeks;
     state.pricesTouched = !!s.pricesTouched;
@@ -2585,23 +2585,27 @@ function derive() {
   }));
   const pantry = new Set(cfg.pantry || []);
   const pqty = cfg.pantryQty || {};
+  const swapMap = week.prodSwap || {}, skipMap = week.skipBuy || {};
   const litems = Object.entries(agg).map(([pid, q]) => {
-    const pr = P[pid];
+    // замена продукта на неделю (нет в магазине -> купить другой)
+    const swapTo = (swapMap[pid] && P[swapMap[pid]]) ? swapMap[pid] : null;
+    const dispId = swapTo || pid;
+    const pr = P[dispId];
     // в кладовой без числа — считаем, что хватает; с числом — вычитаем остаток
     const have = pantry.has(pid) ? ((typeof pqty[pid] === "number" && isFinite(pqty[pid]) && pqty[pid] > 0) ? pqty[pid] : Infinity) : 0;
     const need = Math.max(0, q - have);
     let rq = roundQty(pr.u, need);
-    const pk = (typeof PACK !== "undefined") && PACK[pid]; if (pk && need > 0) rq = Math.max(pk, Math.ceil(need / pk) * pk);   // округляем до размера упаковки (яйца десятками, молоко литрами и т.д.)
-    return { pid, name: pr.n, cat: pr.c, qty: rq, unit: pr.u, sum: rq * (prices[pid]?.p ?? pr.p), home: !!week.home[pid], partial: pantry.has(pid) && need > 0 };
+    const pk = (typeof PACK !== "undefined") && PACK[dispId]; if (pk && need > 0) rq = Math.max(pk, Math.ceil(need / pk) * pk);   // округляем до размера упаковки (яйца десятками, молоко литрами и т.д.)
+    return { pid, name: pr.n, cat: pr.c, qty: rq, unit: pr.u, sum: rq * (prices[dispId]?.p ?? pr.p), home: !!week.home[pid], partial: pantry.has(pid) && need > 0, skipped: !!skipMap[pid], swapFrom: swapTo ? P[pid].n : null };
   });
   const visible = litems.filter((it) => it.qty > 0);   // полностью покрытое кладовой в список не кладём
   const cats = {};
   visible.forEach((it) => { (cats[it.cat] = cats[it.cat] || []).push(it); });
-  const buy = visible.filter((i) => !i.home);
+  const buy = visible.filter((i) => !i.home && !i.skipped);   // «нет в магазине» и «есть дома» в сумму не идут
   const list = {
     cats, total: buy.reduce((s, i) => s + i.sum, 0),
     saved: visible.filter((i) => i.home).reduce((s, i) => s + i.sum, 0),
-    homeCount: visible.length - buy.length, count: buy.length,
+    homeCount: visible.filter((i) => i.home).length, count: buy.length,
     pantryCount: litems.length - visible.length,
   };
 
@@ -2840,6 +2844,55 @@ function screenCook(D) {
     h("div", { style: { display: "flex", gap: "10px", padding: "14px 18px calc(env(safe-area-inset-bottom) + 16px)", borderTop: "1px solid #2A281F" } },
       h("button", { onClick: () => go(i - 1), disabled: i === 0, style: { flex: 1, borderRadius: "14px", padding: "16px 0", fontSize: "15px", fontWeight: 700, textAlign: "center", background: "#26241C", color: i === 0 ? "#5A564A" : "#F6F2E9", border: "1px solid #3A372C" } }, "‹ Назад"),
       h("button", { onClick: () => go(i + 1), style: { flex: 1.5, borderRadius: "14px", padding: "16px 0", fontSize: "15px", fontWeight: 700, textAlign: "center", background: C.green, color: "#fff", border: "none" } }, i >= total - 1 ? "Готово ✓" : "Дальше ›")));
+}
+
+/* ---------- экран: продукт «нет в магазине» — убрать или заменить ---------- */
+function screenBuyFix(D) {
+  const { prices } = D;
+  const pid = state.buyFix;
+  const pr = P[pid];
+  if (!pr) { state.buyFix = null; return screenList(D); }
+  const week = state.week;
+  const omit = (obj, k) => { const o = { ...(obj || {}) }; delete o[k]; return o; };
+  const swapTo = (week.prodSwap && week.prodSwap[pid] && P[week.prodSwap[pid]]) ? week.prodSwap[pid] : null;
+  const skipped = !!(week.skipBuy && week.skipBuy[pid]);
+  const back = () => { state.buyFix = null; state.buyFixSearch = ""; render(); };
+  const doSkip = () => { setWk({ skipBuy: { ...(week.skipBuy || {}), [pid]: true }, prodSwap: omit(week.prodSwap, pid) }); toast(pr.n + " — убрали из списка"); back(); };
+  const unSkip = () => { setWk({ skipBuy: omit(week.skipBuy, pid) }); back(); };
+  const doSwap = (nid) => { setWk({ prodSwap: { ...(week.prodSwap || {}), [pid]: nid }, skipBuy: omit(week.skipBuy, pid) }); toast("Заменили: " + pr.n.toLowerCase() + " → " + P[nid].n.toLowerCase()); back(); };
+  const unSwap = () => { setWk({ prodSwap: omit(week.prodSwap, pid) }); toast("Вернули: " + pr.n.toLowerCase()); back(); };
+
+  const q = (state.buyFixSearch || "").toLowerCase().trim();
+  let opts = Object.keys(P).filter((id) => id !== pid && P[id] && P[id].u === pr.u && P[id].n);
+  opts = q ? opts.filter((id) => P[id].n.toLowerCase().includes(q)) : opts.filter((id) => P[id].c === pr.c);
+  opts = opts.sort((a, b) => (prices[a]?.p ?? P[a].p) - (prices[b]?.p ?? P[b].p)).slice(0, 40);
+
+  const optRow = (id) => h("button", { onClick: () => doSwap(id),
+    style: { width: "100%", borderRadius: "14px", padding: "13px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", background: swapTo === id ? C.greenSoft : C.card, border: `1px solid ${swapTo === id ? C.green : C.line}`, textAlign: "left" } },
+    h("span", { style: { fontSize: "15px", flex: 1, minWidth: 0, fontWeight: swapTo === id ? 700 : 500, color: swapTo === id ? C.green : C.ink } }, P[id].n + (swapTo === id ? " ✓" : "")),
+    h("span", { style: { fontSize: "12px", color: C.mute, whiteSpace: "nowrap" } }, money(prices[id]?.p ?? P[id].p) + "/" + pr.u));
+
+  return h("div", { class: "inner" },
+    backLink("← Покупки", back),
+    h("div", { style: { fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.14em", color: C.amber, marginBottom: "8px" } }, "Нет в магазине"),
+    h("h2", { class: "disp", style: { fontSize: "24px", lineHeight: 1.2, margin: "0 0 6px" } }, pr.n),
+    h("p", { style: { fontSize: "14px", margin: "0 0 20px", color: C.mute, lineHeight: 1.5 } }, "Не нашли в магазине или не хотите брать на этой неделе? Уберите из списка или замените на похожий продукт."),
+    (swapTo ? h("div", { style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: C.greenSoft, border: `1px solid ${C.green}` } },
+        h("div", { style: { fontSize: "13px", color: C.green, marginBottom: "8px" } }, "Сейчас заменено на: " + h("b", null, P[swapTo].n)),
+        h("button", { onClick: unSwap, style: { fontSize: "13px", fontWeight: 700, color: C.green } }, "↩︎ Вернуть «" + pr.n.toLowerCase() + "»")) : null),
+    (skipped ? h("div", { style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: "#FBEAE5", border: `1px solid ${C.red}` } },
+        h("div", { style: { fontSize: "13px", color: C.red, marginBottom: "8px" } }, "Сейчас: не покупаем на этой неделе."),
+        h("button", { onClick: unSkip, style: { fontSize: "13px", fontWeight: 700, color: C.red } }, "↩︎ Вернуть в список")) : null),
+    (!skipped ? h("div", { style: { marginBottom: "18px" } }, Btn("🚫 Не покупать на этой неделе", doSkip, "ghost")) : null),
+    h("h3", { style: { fontWeight: 600, margin: "0 0 4px" } }, "Заменить на другой продукт"),
+    h("div", { style: { fontSize: "12px", marginBottom: "12px", color: C.mute } }, "Замена подставится во все блюда недели и в список покупок."),
+    h("div", { style: { position: "relative", marginBottom: "12px" } },
+      h("input", { "data-fkey": "buyfixsearch", value: state.buyFixSearch || "", placeholder: "Поиск продукта…",
+        onInput: (ev) => { state.buyFixSearch = ev.target.value; render(); },
+        style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "12px 40px 12px 14px", fontSize: "15px", background: C.card, border: `1.5px solid ${C.line}`, color: C.ink } }),
+      (state.buyFixSearch ? h("button", { onClick: () => { state.buyFixSearch = ""; render(); }, style: { position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "16px", color: C.mute, background: "none", border: "none", padding: "4px 8px" } }, "✕") : null)),
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" } },
+      opts.length ? opts.map(optRow) : h("div", { style: { fontSize: "14px", color: C.mute, padding: "4px 0" } }, "Ничего не нашлось — уточните поиск.")));
 }
 
 
@@ -3548,7 +3601,7 @@ function screenPlan(D) {
         h("span", { style: { minWidth: 0 } },
           h("span", { class: "disp", style: { fontSize: "12px", color: C.green, fontWeight: 600 } }, DAYS_S[di], today ? h("span", { style: { marginLeft: "6px", fontFamily: "'Onest',sans-serif", fontSize: "10px", background: C.green, color: "#fff", borderRadius: "6px", padding: "1px 6px", letterSpacing: 0 } }, "СЕГОДНЯ") : null),
           h("span", { style: { display: "block", fontWeight: 600, fontSize: "15px", marginTop: "2px" } }, DAYS[di])),
-        h("button", { onClick: () => setWk({ seed: week.seed + 13, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {} }),
+        h("button", { onClick: () => setWk({ seed: week.seed + 13, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} }),
           style: { flexShrink: 0, borderRadius: "9999px", padding: "9px 14px", fontSize: "13px", fontWeight: 700, textAlign: "center", background: C.greenSoft, color: C.green, border: `1.5px solid ${C.green}` } }, "🔄 Пересобрать"),
         h("span", { style: { textAlign: "right", flexShrink: 0 } },
           h("span", { class: "disp", style: { fontSize: "16px", fontWeight: 800 } }, money(dayCost(di))),
@@ -3608,15 +3661,19 @@ function screenList(D) {
     eyebrow(cat, { marginBottom: "8px" }),
     card(items.map((it, i) => {
       const done = week.bought[it.pid] || it.home;
-      return h("div", { style: { padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px", borderTop: i ? `1px solid ${C.line}` : "none" } },
+      const off = it.skipped;
+      return h("div", { style: { padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: i ? `1px solid ${C.line}` : "none", opacity: off ? 0.65 : 1 } },
         h("button", { onClick: () => setWk({ bought: { ...week.bought, [it.pid]: !week.bought[it.pid] } }),
-          style: { width: "26px", height: "26px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", fontWeight: 700, color: "#fff", flexShrink: 0, background: done ? C.green : C.card, border: `2px solid ${done ? C.green : C.mute}` } }, done ? "✓" : ""),
-        h("span", { style: { flex: 1, minWidth: 0, textDecoration: done ? "line-through" : "none", color: done ? C.mute : C.ink } },
-          h("span", { style: { display: "block", fontSize: "15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, it.name),
-          h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, fmtQty(it.unit, it.qty), it.partial ? h("span", { style: { color: C.green } }, " · остаток, часть есть дома") : null)),
-        h("button", { onClick: () => setWk({ home: { ...week.home, [it.pid]: !week.home[it.pid] } }),
-          style: { borderRadius: "9999px", padding: "4px 10px", fontSize: "11px", flexShrink: 0, background: it.home ? C.greenSoft : "transparent", color: it.home ? C.green : C.mute, border: `1px solid ${it.home ? C.green : C.line}` } }, "есть дома"),
-        h("span", { style: { fontSize: "14px", fontWeight: 600, width: "64px", textAlign: "right", flexShrink: 0 } }, money(it.sum)));
+          style: { marginTop: "1px", width: "26px", height: "26px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", fontWeight: 700, color: "#fff", flexShrink: 0, background: done ? C.green : C.card, border: `2px solid ${done ? C.green : C.mute}` } }, done ? "✓" : ""),
+        h("span", { style: { flex: 1, minWidth: 0 } },
+          h("span", { style: { display: "block", fontSize: "15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: (done || off) ? "line-through" : "none", color: (done || off) ? C.mute : C.ink } }, it.name),
+          h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, off ? "нет в магазине — не покупаем" : fmtQty(it.unit, it.qty),
+            (!off && it.partial) ? h("span", { style: { color: C.green } }, " · остаток, часть есть дома") : null,
+            (!off && it.swapFrom) ? h("span", { style: { color: C.green } }, " · вместо " + it.swapFrom.toLowerCase()) : null),
+          h("div", { style: { display: "flex", gap: "14px", marginTop: "5px" } },
+            h("button", { onClick: () => setWk({ home: { ...week.home, [it.pid]: !week.home[it.pid] } }), style: { fontSize: "11.5px", fontWeight: 600, color: it.home ? C.green : C.mute } }, it.home ? "✓ есть дома" : "есть дома"),
+            h("button", { onClick: () => { state.buyFix = it.pid; state.buyFixSearch = ""; render(); }, style: { fontSize: "11.5px", fontWeight: 600, color: C.amber } }, off ? "↩︎ вернуть" : (it.swapFrom ? "заменено · изменить" : "нет в магазине?")))),
+        h("span", { style: { fontSize: "14px", fontWeight: 600, width: "60px", textAlign: "right", flexShrink: 0, marginTop: "1px", textDecoration: off ? "line-through" : "none", color: off ? C.mute : C.ink } }, off ? "—" : money(it.sum)));
     }), { overflow: "hidden" })));
 
   return [
@@ -3981,6 +4038,7 @@ function view() {
   if (state.cook) return screenCook(D);
   if (state.pantryOpen) return screenPantry();
   if (state.swap) return screenSwap(D);
+  if (state.buyFix) return screenBuyFix(D);
   if (state.favoritesOpen) return screenFavorites(D);
   if (state.freeRecipe) return screenFreeRecipe(D);
   if (state.surprise) return screenSurprise(D);
@@ -4047,7 +4105,7 @@ function applyDataBlob(s) {
     (state.cfg.customProducts || []).forEach((cp) => { if (cp && cp.id && !P[cp.id]) { P[cp.id] = { n: cp.n, u: cp.u || "шт", p: cp.p || 0, c: cp.c || "Моё", nu: cp.nu || [0, 0, 0, 0] }; } });
   }
   if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
-  if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, ...s.week };
+  if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {}, ...s.week };
   if (s.custom) state.custom = s.custom;
   if (s.savedWeeks) state.savedWeeks = s.savedWeeks;
   if (s.pricesTouched != null) state.pricesTouched = !!s.pricesTouched;
