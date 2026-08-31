@@ -811,15 +811,16 @@ const KZT_RUB = 1;   // рублёвая версия — курс не нуже
 /* Магазины. Цены вы задаёте один раз для базового магазина (Пятёрочка),
    для остальных они пересчитываются коэффициентом.            */
 const STORES = [
-  // База цен = реальные цены Ленты (сверены в августе 2026). Коэффициенты — во сколько
-  // раз дороже/дешевле относительно Ленты, по типу сети.
-  { id: "lenta",       n: "Лента",       d: "гипермаркет · сверенные цены", k: 1.00 },
-  { id: "chizhik",     n: "Чижик",       d: "жёсткий дискаунтер, дёшево", k: 0.92 },
-  { id: "auchan",      n: "Ашан",        d: "гипермаркет, дёшево", k: 0.98 },
-  { id: "magnit",      n: "Магнит",      d: "у дома",          k: 1.04 },
-  { id: "pyaterochka", n: "Пятёрочка",  d: "у дома",          k: 1.05 },
-  { id: "perekrestok", n: "Перекрёсток", d: "супермаркет",     k: 1.13 },
-  { id: "vkusvill",    n: "ВкусВилл",    d: "фермерский",      k: 1.28 },
+  // База цен = реальные цены Магнита (сверены 1 сентября 2026 через сайт magnit.ru).
+  // У Магнита коэффициент 1.00 — цены как есть, без наценки. Остальные сети — оценка
+  // относительно Магнита (реальных цен по каждому из них онлайн не достать).
+  { id: "magnit",      n: "Магнит",      d: "реальные цены, сверены 1 сент", k: 1.00 },
+  { id: "chizhik",     n: "Чижик",       d: "жёсткий дискаунтер, дешевле", k: 0.88 },
+  { id: "auchan",      n: "Ашан",        d: "гипермаркет, дешевле", k: 0.94 },
+  { id: "lenta",       n: "Лента",       d: "гипермаркет",     k: 0.96 },
+  { id: "pyaterochka", n: "Пятёрочка",  d: "у дома",          k: 1.01 },
+  { id: "perekrestok", n: "Перекрёсток", d: "супермаркет",     k: 1.09 },
+  { id: "vkusvill",    n: "ВкусВилл",    d: "фермерский, дороже", k: 1.23 },
 ];
 const storeK = (id) => (STORES.find((x) => x.id === id) || STORES[0]).k;
 const nf = (v) => new Intl.NumberFormat("ru-RU").format(Math.round(v));
@@ -2218,29 +2219,41 @@ const app = document.getElementById("app");
 /* ---------- пакет цен (сверено помощниками, август 2026, Алматы) ----------
    Обновляются автоматически при следующем открытии, если пользователь
    сам не правил цены. Продукты не из списка остаются как были.            */
-const PRICE_PACK = "ru-magnit-08.5";
-const PACK_DATE = "2026-08-31";   // дата, когда цены сверены в магазинах — для отметки «обновлено»
+const PRICE_PACK = "ru-magnit-09.1";
+const PACK_DATE = "2026-09-01";   // дата, когда цены сверены в магазинах — для отметки «обновлено»
 const PRICE_UPDATES = {
-  tvorog: 430, moloko: 100, kefir: 100, smetana: 330, syr: 649,
-  maslo_sl: 950, egg: 10, file: 400, bedra: 290, farsh: 480,
-  indeyka: 680, pechen: 216, mintay: 730, tunec: 160, kartofel: 28,
-  morkov: 35, luk: 40, chesnok: 250, kapusta: 48, svekla: 30,
-  pomidor: 75, ogurec: 50, perec: 100, kabachok: 37, baklazhan: 100,
-  tykva: 55, griby: 350, brokkoli: 241, goroshek: 300, zelen: 68,
-  banan: 100, yabloko: 112, yagody: 544, grechka: 150, ris: 200,
-  bulgur: 263, makarony: 160, lapsha: 200, ovsyanka: 140, chechevica: 141,
-  fasol: 110, kukuruza: 100, muka: 60, sahar: 100, med: 600,
-  izum: 400, tomat: 380, maslo_r: 175, hleb: 62, yogurt: 200,
-  slivki: 234, brynza: 720, syr_tvor: 720, svinina: 450, govyadina: 780,
-  baranina: 850, kuritsa: 280, kolbasa: 340, sosiski: 335, gorbusha: 900,
-  seld: 450, krevetki: 935, redis: 70, salat: 75, shpinat: 350,
-  cvetnaya: 150, fasol_str: 211, avokado: 100, limon: 140, apelsin: 100,
-  grusha: 120, imbir: 350, nut: 157, gorox: 100, perlovka: 130,
-  pshenka: 120, manka: 100, kus: 340, suhofrukty: 300, orehi: 1000,
-  soev_sous: 300, gorchica: 250, mayonez: 260, uksus: 50, lavash: 56,
-  pechenye: 360, hlebcy: 500, tvorog_o: 415, yogurt_gr: 346, farsh_ind: 500,
-  treska: 780, ketchup: 260, maslo_ol: 950, smetana_z: 300, kofe: 2029,
-  chay: 1350, kakao: 800, shokolad: 1300, sok: 130
+  ryazhenka: 156, snezhok: 90, tvor_massa: 436, plavl_syr: 700, syr_kosichka: 850, slivoch_syr: 742,
+  ayran: 60, maslo_topl: 1000, sguschenka: 134, morozhenoe: 92, syrok_glaz: 43, sardelki: 343,
+  vetchina: 475, bekon: 800, kur_krylya: 280, kur_farsh: 340, svin_farsh: 450, sheya_svin: 530,
+  steyk_gov: 1050, kupaty: 525, pelmeni: 300, kotlety: 493, semga: 1500, forel: 2189,
+  skumbriya: 983, kilka: 396, ikra_mintaya: 199, krab_palochki: 500, ryb_palochki: 490, kalmary: 889,
+  krab_myaso: 500, cukini: 130, tykva_butternat: 110, rukkola: 75, pekin_kapusta: 120, selderey: 100,
+  sparzha: 280, kukuruza_pochatok: 50, vinograd: 230, mandariny: 170, kivi: 210, granat: 95,
+  klubnika: 340, persik: 170, dynya: 95, arbuz: 50, chereshnya: 380, kinoa: 600,
+  ovs_otrubi: 170, kukur_krupa: 144, yachnevaya: 100, spagetti: 151, vermishel: 144, krahmal: 325,
+  razryhlitel: 12, vanilin: 12, drozhzhi: 27, panir_suhari: 130, shproty: 165, olivki: 170,
+  masliny: 170, kukur_hlopya: 352, myusli: 436, arah_pasta: 275, varenye: 145, dzhem: 125,
+  adzhika: 105, hren: 81, pesto: 299, balzamik: 340, smet_sous: 104, sok_apelsin: 185,
+  mineralka: 45, kompot: 75, mors: 162, limonad: 80, chipsy: 90, suhariki: 43,
+  popkorn: 70, semechki: 280, zefir: 394, marmelad: 260, vafli: 447, pryaniki: 266,
+  halva: 400, kozinaki: 598, finiki: 280, kuraga: 470, chernosliv: 800, tvorog: 417,
+  moloko: 100, kefir: 100, smetana: 348, syr: 649, maslo_sl: 1000, egg: 10,
+  file: 525, bedra: 659, farsh: 433, indeyka: 675, pechen: 216, mintay: 837,
+  tunec: 170, kartofel: 28, morkov: 35, luk: 40, chesnok: 250, kapusta: 48,
+  svekla: 30, pomidor: 75, ogurec: 50, perec: 100, kabachok: 37, baklazhan: 100,
+  tykva: 55, griby: 350, brokkoli: 241, goroshek: 250, zelen: 68, banan: 100,
+  yabloko: 112, yagody: 867, grechka: 106, ris: 144, bulgur: 312, makarony: 144,
+  lapsha: 200, ovsyanka: 155, chechevica: 328, fasol: 135, kukuruza: 110, muka: 69,
+  sahar: 115, med: 640, izum: 400, tomat: 453, maslo_r: 142, hleb: 67,
+  yogurt: 200, slivki: 237, brynza: 783, syr_tvor: 742, svinina: 450, govyadina: 825,
+  baranina: 850, kuritsa: 446, kolbasa: 332, sosiski: 345, gorbusha: 947, seld: 542,
+  krevetki: 1082, redis: 70, salat: 75, shpinat: 350, cvetnaya: 150, fasol_str: 211,
+  avokado: 100, limon: 140, apelsin: 100, grusha: 120, imbir: 350, nut: 157,
+  gorox: 138, perlovka: 247, pshenka: 100, manka: 100, kus: 475, suhofrukty: 300,
+  orehi: 1000, soev_sous: 460, gorchica: 375, mayonez: 267, uksus: 50, lavash: 83,
+  pechenye: 358, hlebcy: 500, tvorog_o: 422, yogurt_gr: 327, farsh_ind: 599, treska: 842,
+  ketchup: 250, maslo_ol: 1070, smetana_z: 348, kofe: 1550, chay: 1350, kakao: 690,
+  shokolad: 1000, sok: 90
 };
 function freshPrices() {
   return Object.fromEntries(Object.entries(P).map(([id, v]) => {
@@ -2281,7 +2294,7 @@ let state = {
   msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "", phone: null, cloud: false, loginOpen: false, loginInput: "", buyFix: null, buyFixSearch: "",
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
   cfg: {
-    budget: 7000, mode: "diet", store: "lenta",
+    budget: 7000, mode: "diet", store: "magnit",
     meals: { breakfast: true, lunch: true, snack: true, dinner: true, drink: true },
     drinksPerDay: 2, snacksPerDay: 1,
     favorites: [], banned: [], pantry: [], pantryQty: {}, photos: {}, customProducts: [], onboarded: false, theme: "light",
