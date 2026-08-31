@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Рацион — планировщик меню</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --paper:#F6F2E9; --card:#FFFFFF; --ink:#14130F; --mute:#8A8578; --line:#E4DED0; --green:#2E6B4F; --greenSoft:#E7F0EA; --amber:#E9A417; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{ background:var(--paper); color:var(--ink); font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; min-height:100dvh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 20px calc(32px + env(safe-area-inset-bottom)); }
+  .wrap{ width:100%; max-width:440px; }
+  .logo{ font-size:56px; text-align:center; margin-bottom:8px; }
+  h1{ font-size:30px; font-weight:800; text-align:center; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub{ font-size:15px; color:var(--mute); text-align:center; margin:0 0 28px; line-height:1.5; }
+  a.card{ display:block; text-decoration:none; color:inherit; background:var(--card); border:1.5px solid var(--line); border-radius:20px;
+    padding:20px 22px; margin-bottom:14px; box-shadow:0 6px 20px rgba(20,19,15,0.05); transition:transform .12s ease, border-color .12s ease; }
+  a.card:active{ transform:scale(0.98); }
+  a.card.ru{ border-color:var(--green); }
+  .flag{ font-size:34px; }
+  .row{ display:flex; align-items:center; gap:16px; }
+  .name{ font-size:19px; font-weight:800; margin-bottom:3px; }
+  .desc{ font-size:13.5px; color:var(--mute); line-height:1.45; }
+  .arrow{ margin-left:auto; font-size:22px; color:var(--green); }
+  .tip{ margin-top:20px; background:var(--greenSoft); color:var(--green); border-radius:16px; padding:14px 16px; font-size:13px; line-height:1.5; }
+  .tip b{ font-weight:800; }
+  .foot{ text-align:center; font-size:12px; color:var(--mute); margin-top:22px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">🍽️</div>
+    <h1>Рацион</h1>
+    <p class="sub">Планировщик меню на неделю под бюджет и КБЖУ.<br>Выберите свою страну — цены и магазины уже настроены.</p>
+
+    <a class="card ru" href="ratsion-ru-sajt.html">
+      <div class="row">
+        <span class="flag">🇷🇺</span>
+        <span>
+          <div class="name">Россия</div>
+          <div class="desc">рубли · Магнит, Пятёрочка, Лента, Ашан, Чижик</div>
+        </span>
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <a class="card" href="ratsion-sajt.html">
+      <div class="row">
+        <span class="flag">🇰🇿</span>
+        <span>
+          <div class="name">Казахстан</div>
+          <div class="desc">тенге · Магнум</div>
+        </span>
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <div class="tip">
+      📱 <b>Добавьте на экран телефона:</b> откройте нужную версию → кнопка «Поделиться» → «На экран „Домой“». Тогда «Рацион» будет запускаться как обычное приложение, а все данные сохранятся.
+    </div>
+    <div class="foot">Данные хранятся только в вашем телефоне.</div>
+  </div>
+</body>
+</html>
