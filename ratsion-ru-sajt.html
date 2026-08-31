@@ -2266,7 +2266,7 @@ function h(tag, props, ...kids) {
 let state = {
   loaded: false, tab: "plan", recipe: null, editEater: null, draft: null,
   freeRecipe: null, uniqueOpen: false, have: {}, deck: null, surprise: false, onboard: null, priceSearch: "", planDay: null, haveSearch: "", storeOpen: false, pantrySearch: "", swap: null, swapSearch: "",
-  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "",
+  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "", phone: null, cloud: false, loginOpen: false, loginInput: "",
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
   cfg: {
     budget: 7000, mode: "diet", store: "lenta",
@@ -2298,6 +2298,7 @@ function persist() {
       pricePack: state.pricePack, pricesTouched: state.pricesTouched,
     }));
   } catch (_) {}
+  if (typeof cloudScheduleSave === "function") cloudScheduleSave();
 }
 function load() {
   try {
@@ -3564,6 +3565,14 @@ function screenPlan(D) {
           h("div", { style: { fontSize: "13.5px", fontWeight: 700, color: C.red, marginBottom: "2px" } }, "⚠️ Браузер не сохраняет данные"),
           h("div", { style: { fontSize: "12.5px", color: C.ink, lineHeight: 1.45 } }, "Откройте сайт, войдя в свой аккаунт Claude, — тогда настройки не будут теряться. Или сохраните копию: Настройки → «Сохранить мои данные». Нажмите, чтобы перейти."))
       : null,
+    (state.cloud && !state.phone)
+      ? h("div", { onClick: () => { state.loginOpen = true; state.loginInput = ""; render(); }, style: { borderRadius: "14px", padding: "12px 14px", marginBottom: "14px", background: C.greenSoft, border: `1.5px solid ${C.green}`, cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" } },
+          h("span", { style: { fontSize: "20px" } }, "📱"),
+          h("span", { style: { flex: 1, minWidth: 0 } },
+            h("span", { style: { display: "block", fontSize: "13.5px", fontWeight: 700, color: C.green } }, "Войти по номеру телефона"),
+            h("span", { style: { display: "block", fontSize: "12px", color: C.ink } }, "Меню и настройки будут на всех телефонах")),
+          h("span", { style: { fontSize: "18px", color: C.green } }, "→"))
+      : null,
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "📅 Неделя"),
     h("div", { style: { fontSize: "13px", marginBottom: "14px", color: C.mute } },
       `${cfg.eaters.map((e) => e.name).join(", ")} · ${servings.toFixed(2).replace(/0$/, "")} порции`,
@@ -3879,6 +3888,15 @@ function screenSettings(D) {
       h("div", { style: { fontSize: "13.5px", fontWeight: 700, marginBottom: "2px", color: state.storageBlocked ? C.red : C.ink } }, state.storageBlocked ? "⚠️ Браузер не сохраняет данные" : "💾 Сохранить мои данные"),
       h("div", { style: { fontSize: "12.5px", marginBottom: "12px", color: C.mute, lineHeight: 1.45 } }, state.storageBlocked ? "Настройки будут теряться при закрытии. Войдите в аккаунт Claude при открытии сайта — или сохраняйте копию кнопкой ниже и вставляйте обратно." : "Обычно всё сохраняется само. Но на всякий случай (смена телефона, очистка браузера) скопируйте копию и сохраните в Заметки."),
       h("button", { onClick: async () => { const ok = await copyText(backupText()); toast(ok ? "📋 Скопировано — вставьте и сохраните в Заметки" : "Не удалось скопировать"); }, style: { width: "100%", borderRadius: "12px", padding: "13px", fontSize: "14px", fontWeight: 700, background: C.green, color: "#fff", border: "none" } }, "📋 Скопировать мои данные")),
+    state.cloud ? (state.phone
+      ? h("div", { style: { borderRadius: "14px", padding: "14px 16px", marginBottom: "22px", background: C.greenSoft, border: `1.5px solid ${C.green}` } },
+          h("div", { style: { fontSize: "13.5px", fontWeight: 700, color: C.green, marginBottom: "2px" } }, "📱 Вход выполнен: +" + state.phone),
+          h("div", { style: { fontSize: "12.5px", color: C.ink, marginBottom: "12px", lineHeight: 1.45 } }, "Настройки, кладовая и меню синхронизируются на всех телефонах с этим номером."),
+          h("div", { style: { display: "flex", gap: "8px" } },
+            h("button", { onClick: () => { state.loginOpen = true; state.loginInput = ""; render(); }, style: { flex: 1, borderRadius: "12px", padding: "11px", fontSize: "13px", fontWeight: 700, background: C.card, color: C.ink, border: `1.5px solid ${C.line}` } }, "Сменить номер"),
+            h("button", { onClick: () => doLogout(), style: { flex: 1, borderRadius: "12px", padding: "11px", fontSize: "13px", fontWeight: 700, background: C.card, color: C.red, border: `1.5px solid ${C.line}` } }, "Выйти")))
+      : h("button", { onClick: () => { state.loginOpen = true; state.loginInput = ""; render(); }, style: { width: "100%", borderRadius: "14px", padding: "15px", marginBottom: "22px", fontSize: "15px", fontWeight: 700, textAlign: "center", background: C.green, color: "#fff", border: "none" } }, "📱 Войти по номеру — синхронизация телефонов"))
+      : null,
     eyebrow("Режим подбора"),
     h("div", { style: { display: "flex", gap: "8px", marginBottom: "8px" } },
       [["normal", "Обычный"], ["diet", "Диетический"]].map(([v, l]) => h("button", { onClick: () => setCfg({ ...cfg, mode: v }),
@@ -3960,6 +3978,7 @@ function toastNode() {
 function view() {
   if (!state.loaded) return h("div", { class: "inner", style: { paddingTop: "80px", textAlign: "center", color: C.mute } }, "Загружаю…");
   const D = derive();
+  if (state.loginOpen) return screenLogin();
   if (state.onboard != null) return screenOnboard(D);
   if (state.cook) return screenCook(D);
   if (state.pantryOpen) return screenPantry();
@@ -3998,11 +4017,109 @@ function render() {
   }
 }
 
+/* ---------- облако: Supabase (телефон как ключ, без паролей/SMS) ---------- */
+const SUPA_URL = "https://shhuqjekambndwhnehnr.supabase.co";
+const SUPA_KEY = "sb_publishable_Z8j-EExKrZ-twFoXM72l4g_mXMKAWzW";
+const EDITION = (typeof KEY === "string" && KEY.indexOf(":kz:") >= 0) ? "kz" : "ru";
+const PHONE_KEY = "ratsion:phone";
+let cloudSaveTimer = null;
+
+async function supaRPC(fn, body) {
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    if (!r.ok) return { ok: false };
+    const txt = await r.text();
+    return { ok: true, data: txt ? JSON.parse(txt) : null };
+  } catch (_) { return { ok: false }; }
+}
+function userDataBlob() {
+  return { cfg: state.cfg, week: state.week, custom: state.custom, savedWeeks: state.savedWeeks, prices: state.basePrices, pricePack: state.pricePack, pricesTouched: state.pricesTouched };
+}
+function applyDataBlob(s) {
+  if (!s) return;
+  if (s.cfg) {
+    const eaters = (s.cfg.eaters || []).map((e) => ({ ...e, dislikes: Array.isArray(e.dislikes) ? Object.fromEntries(e.dislikes.map((p) => [p, "always"])) : (e.dislikes || {}) }));
+    state.cfg = { ...state.cfg, ...s.cfg, eaters: eaters.length ? eaters : state.cfg.eaters };
+    if (state.cfg.pantryQty) { const nq = {}; for (const k in state.cfg.pantryQty) { const v = state.cfg.pantryQty[k]; if (typeof v === "number" && isFinite(v) && v > 0) nq[k] = v; } state.cfg.pantryQty = nq; }
+    if (s.cfg.onboarded === undefined) state.cfg.onboarded = true;
+    (state.cfg.customProducts || []).forEach((cp) => { if (cp && cp.id && !P[cp.id]) { P[cp.id] = { n: cp.n, u: cp.u || "шт", p: cp.p || 0, c: cp.c || "Моё", nu: cp.nu || [0, 0, 0, 0] }; } });
+  }
+  if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
+  if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, ...s.week };
+  if (s.custom) state.custom = s.custom;
+  if (s.savedWeeks) state.savedWeeks = s.savedWeeks;
+  if (s.pricesTouched != null) state.pricesTouched = !!s.pricesTouched;
+}
+function cloudSaveNow() {
+  if (!state.phone || !state.cloud) return;
+  supaRPC("ratsion_save", { p_phone: state.phone, p_data: userDataBlob(), p_edition: EDITION });
+}
+function cloudScheduleSave() {
+  if (!state.phone || !state.cloud) return;
+  if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(cloudSaveNow, 1500);
+}
+async function cloudInit() {
+  const pr = await supaRPC("ratsion_get_prices", { p_edition: EDITION });
+  if (!pr.ok) { state.cloud = false; return; }        // артефакт/офлайн — работаем локально
+  state.cloud = true;
+  if (pr.data && !state.pricesTouched) {              // центральные цены, если пользователь не правил сам
+    const merged = { ...state.basePrices };
+    for (const id in pr.data) { if (P[id]) merged[id] = { p: pr.data[id].p, updated: pr.data[id].updated || TODAY() }; }
+    state.basePrices = merged;
+  }
+  if (state.phone) {
+    const r = await supaRPC("ratsion_load", { p_phone: state.phone, p_edition: EDITION });
+    if (r.ok && r.data) { applyDataBlob(r.data); try { localStorage.setItem(KEY, JSON.stringify(userDataBlob())); } catch (_) {} }
+    else if (r.ok && !r.data) { cloudSaveNow(); }     // в облаке пусто — заливаем локальное
+  }
+  render();
+}
+async function doLogin(phoneRaw) {
+  const digits = String(phoneRaw || "").replace(/[^0-9]/g, "");
+  if (digits.length < 5) { toast("Введите номер телефона"); return; }
+  state.phone = digits;
+  try { localStorage.setItem(PHONE_KEY, digits); } catch (_) {}
+  const r = await supaRPC("ratsion_load", { p_phone: digits, p_edition: EDITION });
+  if (r.ok && r.data) { applyDataBlob(r.data); persist(); toast("С возвращением! Данные загружены"); }
+  else { cloudSaveNow(); persist(); toast("Готово — данные теперь в аккаунте"); }
+  state.loginOpen = false; state.loginInput = "";
+  render();
+}
+function doLogout() {
+  cloudSaveNow();
+  state.phone = null;
+  try { localStorage.removeItem(PHONE_KEY); } catch (_) {}
+  toast("Вы вышли. Данные остаются на этом устройстве");
+  render();
+}
+
+/* ---------- экран: вход по номеру ---------- */
+function screenLogin() {
+  return h("div", { class: "inner" },
+    backLink("← Назад", () => { state.loginOpen = false; render(); }),
+    h("div", { style: { fontSize: "48px", textAlign: "center", marginTop: "16px", marginBottom: "8px" } }, "📱"),
+    h("h2", { class: "disp", style: { fontSize: "26px", textAlign: "center", margin: "0 0 8px" } }, "Вход по номеру"),
+    h("p", { style: { fontSize: "14px", textAlign: "center", margin: "0 0 24px", color: C.mute, lineHeight: 1.5 } }, "Введите номер телефона — и ваши настройки, кладовая и меню будут доступны на любом телефоне. Без паролей и кодов."),
+    h("input", { value: state.loginInput || "", placeholder: "+7 900 123-45-67", inputmode: "tel", "data-fkey": "loginphone",
+      onInput: (ev) => { state.loginInput = ev.target.value; },
+      style: { width: "100%", boxSizing: "border-box", borderRadius: "14px", padding: "16px", fontSize: "18px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.green}`, marginBottom: "14px" } }),
+    Btn("Войти", () => doLogin(state.loginInput)),
+    h("div", { style: { marginTop: "10px" } }, Btn("Пока без входа (только это устройство)", () => { state.loginOpen = false; render(); }, "ghost")),
+    h("p", { style: { fontSize: "12px", textAlign: "center", marginTop: "16px", color: C.mute, lineHeight: 1.5 } }, "Данные видит только тот, кто знает номер. Никаких SMS и паролей не нужно."));
+}
+
 /* ---------- старт ---------- */
 load();
+try { state.phone = localStorage.getItem(PHONE_KEY) || null; } catch (_) {}
 state.storageBlocked = !storageWorks();
 (state.cfg.customProducts || []).forEach((cp) => { if (cp && cp.id && !P[cp.id]) { P[cp.id] = { n: cp.n, u: cp.u || "шт", p: cp.p || 0, c: cp.c || "Моё", nu: cp.nu || [0, 0, 0, 0] }; if (!state.basePrices[cp.id]) state.basePrices[cp.id] = { p: cp.p || 0, updated: TODAY() }; } });
 if (!state.cfg.onboarded) { state.onboard = 0; state.tab = "settings"; }   // новый пользователь — сначала мастер настройки
 state.loaded = true;
 render();
+if (typeof location !== "undefined") cloudInit();   // подтягиваем облачные цены и (если вошли) данные аккаунта; на артефакте тихо остаёмся локально
 </script>
