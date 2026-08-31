@@ -2637,11 +2637,13 @@ function Btn(children, onClick, kind = "primary") {
     },
   }, children);
 }
-function Mini(children, onClick, on) {
+function Mini(children, onClick, on, accent) {
   return h("button", {
     onClick, style: {
-      borderRadius: "9999px", padding: "7px 14px", fontSize: "12px", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap",
-      background: on ? C.green : C.card, color: on ? "#fff" : C.ink, border: `1.5px solid ${on ? C.green : C.line}`,
+      borderRadius: "9999px", padding: "7px 14px", fontSize: "12px", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap",
+      background: on ? C.green : (accent ? C.greenSoft : C.card),
+      color: on ? "#fff" : (accent ? C.green : C.ink),
+      border: `1.5px solid ${on || accent ? C.green : C.line}`,
     },
   }, children);
 }
@@ -3496,8 +3498,8 @@ function screenPlan(D) {
         : sl.status === "leftover"
         ? [Mini("Готовить заново", () => setWk({ batch: { ...week.batch, [`${di - 1}-${m}`]: false } }))]
         : [
-            Mini(cooked ? "Приготовили ✓" : "Приготовили", () => toggleCooked(key), cooked),
-            Mini("Заменить", () => setSwap({ id: sl.id, day: di })),
+            Mini(cooked ? "✓ Приготовили" : "Приготовили", () => toggleCooked(key), cooked, true),
+            Mini("🔄 Заменить", () => setSwap({ id: sl.id, day: di })),
             Mini(PER_DAY[m] ? "Пропустить" : "Едим не дома", () => setWk({ skipped: { ...week.skipped, [key]: true } })),
             (di < 6 && !PER_DAY[m]) ? Mini(sl.mult === 2 ? "На 2 дня ✓" : "На 2 дня", () => setWk({ batch: { ...week.batch, [key]: !week.batch[key] } }), sl.mult === 2) : null,
           ];
@@ -3564,10 +3566,10 @@ function screenPlan(D) {
     h("div", { style: { fontSize: "13px", marginBottom: "14px", color: C.mute } },
       `${cfg.eaters.map((e) => e.name).join(", ")} · ${servings.toFixed(2).replace(/0$/, "")} порции`,
       h("span", { style: { color: (cfg.mode || "diet") === "diet" ? C.green : C.mute } }, ` · ${(cfg.mode || "diet") === "diet" ? "диета" : "обычный"}`)),
-    h("div", { style: { display: "flex", gap: "16px", marginBottom: "14px", flexWrap: "wrap" } },
-      h("button", { onClick: saveWeek, style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, "♡ Сохранить неделю"),
-      h("button", { onClick: () => shareMenu(D), style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, "⇪ Отправить меню"),
-      h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "14px", color: C.green, fontWeight: 600 } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`)),
+    h("div", { style: { display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" } },
+      h("button", { onClick: saveWeek, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "♡ Сохранить"),
+      h("button", { onClick: () => shareMenu(D), style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "⇪ Отправить"),
+      h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`)),
     h("div", { style: { display: "flex", gap: "10px", marginBottom: "14px" } },
       h("button", { onClick: () => { state.surprise = true; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.line}`, color: C.ink } }, "🎲 Сюрприз-рецепт"),
       h("button", { onClick: () => { state.uniqueOpen = true; state.deck = null; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.greenSoft, border: `1.5px solid ${C.green}`, color: C.green } }, "✨ Из моих продуктов")),
@@ -3599,7 +3601,7 @@ function screenList(D) {
       const done = week.bought[it.pid] || it.home;
       return h("div", { style: { padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px", borderTop: i ? `1px solid ${C.line}` : "none" } },
         h("button", { onClick: () => setWk({ bought: { ...week.bought, [it.pid]: !week.bought[it.pid] } }),
-          style: { width: "20px", height: "20px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", color: "#fff", flexShrink: 0, background: done ? C.green : "transparent", border: `1.5px solid ${done ? C.green : C.line}` } }, done ? "✓" : ""),
+          style: { width: "26px", height: "26px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", fontWeight: 700, color: "#fff", flexShrink: 0, background: done ? C.green : C.card, border: `2px solid ${done ? C.green : C.mute}` } }, done ? "✓" : ""),
         h("span", { style: { flex: 1, minWidth: 0, textDecoration: done ? "line-through" : "none", color: done ? C.mute : C.ink } },
           h("span", { style: { display: "block", fontSize: "15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, it.name),
           h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, fmtQty(it.unit, it.qty), it.partial ? h("span", { style: { color: C.green } }, " · остаток, часть есть дома") : null)),
@@ -3767,15 +3769,15 @@ function screenSettings(D) {
   const num = (e, field, label, fkey) => h("div", { style: { flex: 1 } },
     h("input", { type: "number", inputmode: "numeric", value: e[field] ?? "", placeholder: "—", "data-fkey": fkey,
       onInput: (ev) => setCfg({ ...cfg, eaters: cfg.eaters.map((x) => x.id === e.id ? { ...x, [field]: Number(ev.target.value) || 0 } : x) }),
-      style: { width: "100%", borderRadius: "12px", padding: "8px", textAlign: "center", fontSize: "14px", fontWeight: 600, background: C.paper, border: `1px solid ${C.line}` } }),
-    h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, label));
+      style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.green}` } }),
+    h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, "✏️ " + label));
 
   const targetField = (e, key, label) => {
     const mapped = key === "tk" ? "k" : key === "tb" ? "b" : key === "tj" ? "j" : "u";
     return h("div", { style: { flex: 1 } },
       h("input", { type: "number", inputmode: "numeric", value: e[key] ?? "", placeholder: String(targets({ ...e, [key]: 0 })[mapped]), "data-fkey": `eater-${e.id}-${key}`,
         onInput: (ev) => setCfg({ ...cfg, eaters: cfg.eaters.map((x) => x.id === e.id ? { ...x, [key]: Number(ev.target.value) || undefined } : x) }),
-        style: { width: "100%", borderRadius: "12px", padding: "8px 4px", textAlign: "center", fontSize: "14px", fontWeight: 600, background: C.paper, border: `1px solid ${C.line}` } }),
+        style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "9px 4px", textAlign: "center", fontSize: "15px", fontWeight: 700, color: C.ink, background: C.card, border: `1.5px solid ${C.green}` } }),
       h("div", { style: { fontSize: "10px", textAlign: "center", marginTop: "4px", color: C.mute } }, label));
   };
 
@@ -3934,13 +3936,17 @@ function screenSettings(D) {
 
 /* ---------- нижняя навигация + тост ---------- */
 function nav(D) {
-  const items = [["plan", "Неделя"], ["list", "Покупки"], ["prices", "Цены"], ["settings", "Настройки"]];
+  const items = [["plan", "📅", "Неделя"], ["list", "🛒", "Покупки"], ["prices", "🏷️", "Цены"], ["settings", "⚙️", "Настройки"]];
   return h("div", { class: "navbar" },
-    h("div", { style: { margin: "0 auto", maxWidth: "448px", display: "flex" } },
-      items.map(([key, label]) => h("button", { onClick: () => setTab(key),
-        style: { flex: 1, padding: "16px 0", fontSize: "13px", fontWeight: 600, textAlign: "center", color: state.tab === key ? C.green : C.mute } },
-        label,
-        key === "prices" && D.stale > 0 ? h("span", { style: { marginLeft: "4px", display: "inline-block", width: "6px", height: "6px", borderRadius: "9999px", verticalAlign: "middle", background: C.amber } }) : null))));
+    h("div", { style: { margin: "0 auto", maxWidth: "448px", display: "flex", gap: "4px", padding: "6px 8px" } },
+      items.map(([key, icon, label]) => {
+        const on = state.tab === key;
+        return h("button", { onClick: () => setTab(key),
+          style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "7px 0 9px", borderRadius: "14px", background: on ? C.greenSoft : "transparent", color: on ? C.green : C.mute } },
+          h("span", { style: { fontSize: "21px", lineHeight: 1, position: "relative", display: "inline-block", filter: on ? "none" : "grayscale(0.35)", opacity: on ? 1 : 0.85 } }, icon,
+            key === "prices" && D.stale > 0 ? h("span", { style: { position: "absolute", top: "-3px", right: "-7px", width: "8px", height: "8px", borderRadius: "9999px", background: C.amber, border: "1.5px solid " + C.paper } }) : null),
+          h("span", { style: { fontSize: "11px", fontWeight: on ? 800 : 600, letterSpacing: "0.01em" } }, label));
+      })));
 }
 function toastNode() {
   if (!state.msg) return null;
