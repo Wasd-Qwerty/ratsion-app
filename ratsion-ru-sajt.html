@@ -32,12 +32,14 @@ textarea{ resize:vertical; }
 const C_LIGHT = {
   paper: "#F6F2E9", card: "#FFFFFF", ink: "#14130F", mute: "#8A8578",
   line: "#E4DED0", line2: "#D8D2C4", green: "#2E6B4F", greenSoft: "#E7F0EA",
+  fresh: "#45A06A",
   amber: "#E9A417", amberSoft: "#FBF0D8", red: "#B4442B", dangerSoft: "#FBEAE5",
   cardShadow: "0 2px 10px rgba(20,19,15,0.05)",
 };
 const C_DARK = {
   paper: "#16140E", card: "#221E16", ink: "#F2EEE2", mute: "#A59E8C",
   line: "#353128", line2: "#46402E", green: "#66B389", greenSoft: "#233329",
+  fresh: "#74C892",
   amber: "#EDB53E", amberSoft: "#37301C", red: "#E2805E", dangerSoft: "#3A241E",
   cardShadow: "0 2px 12px rgba(0,0,0,0.38)",
 };
@@ -3606,7 +3608,7 @@ function screenPlan(D) {
               h("span", { style: { color: C.ink } }, `${e.name} · порция ${f}`),
               h("span", { style: { color: wide ? C.amber : C.mute } }, `${Math.round(got.k)} / ${t.k} ккал`)),
             h("div", { style: { height: "6px", borderRadius: "9999px", overflow: "hidden", background: C.line } },
-              h("div", { style: { height: "100%", borderRadius: "9999px", width: `${pct}%`, background: wide ? C.amber : C.green } })),
+              h("div", { style: { height: "100%", borderRadius: "9999px", width: `${pct}%`, background: wide ? C.amber : C.fresh } })),
             h("div", { style: { fontSize: "11px", marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" } },
               macro("Б", got.b, t.b), macro("Ж", got.j, t.j), macro("У", got.u, t.u),
               h("span", { style: { color: C.mute } }, `${Math.round(got.g)} г еды`)));
@@ -3682,7 +3684,7 @@ function screenList(D) {
       const off = it.skipped;
       return h("div", { style: { padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: i ? `1px solid ${C.line}` : "none", opacity: off ? 0.65 : 1 } },
         h("button", { onClick: () => setWk({ bought: { ...week.bought, [it.pid]: !week.bought[it.pid] } }),
-          style: { marginTop: "1px", width: "26px", height: "26px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", fontWeight: 700, color: "#fff", flexShrink: 0, background: done ? C.green : C.card, border: `2px solid ${done ? C.green : C.mute}` } }, done ? "✓" : ""),
+          style: { marginTop: "1px", width: "26px", height: "26px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", fontWeight: 700, color: "#fff", flexShrink: 0, background: done ? C.fresh : C.card, border: `2px solid ${done ? C.fresh : C.mute}` } }, done ? "✓" : ""),
         h("span", { style: { flex: 1, minWidth: 0 } },
           h("span", { style: { display: "block", fontSize: "15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: (done || off) ? "line-through" : "none", color: (done || off) ? C.mute : C.ink } }, it.name),
           h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, off ? "нет в магазине — не покупаем" : fmtQty(it.unit, it.qty),
