@@ -2256,7 +2256,7 @@ function h(tag, props, ...kids) {
 let state = {
   loaded: false, tab: "plan", recipe: null, editEater: null, draft: null,
   freeRecipe: null, uniqueOpen: false, have: {}, deck: null, surprise: false, onboard: null, priceSearch: "", planDay: null, haveSearch: "", storeOpen: false, pantrySearch: "", swap: null, swapSearch: "",
-  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false,
+  msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "",
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
   cfg: {
     budget: 45000, mode: "diet", store: "magnum",
@@ -2271,7 +2271,7 @@ let state = {
     ],
   },
   basePrices: freshPrices(),
-  week: { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {} },
+  week: { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {} },
   custom: [],
 };
 let msgTimer = null;
@@ -2302,10 +2302,12 @@ function load() {
           : (e.dislikes || {}),
       }));
       state.cfg = { ...state.cfg, ...s.cfg, eaters: eaters.length ? eaters : state.cfg.eaters };
+      // кладовая: оставляем только числовые количества (старые текстовые заметки убираем — теперь вводим числом)
+      if (state.cfg.pantryQty) { const nq = {}; for (const k in state.cfg.pantryQty) { const v = state.cfg.pantryQty[k]; if (typeof v === "number" && isFinite(v) && v > 0) nq[k] = v; } state.cfg.pantryQty = nq; }
       if (s.cfg.onboarded === undefined) state.cfg.onboarded = true;   // у старых пользователей уже всё настроено — мастер не показываем
     }
     if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
-    if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, ...s.week };
+    if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, ...s.week };
     if (s.custom) state.custom = s.custom;
     if (s.savedWeeks) state.savedWeeks = s.savedWeeks;
     state.pricesTouched = !!s.pricesTouched;
@@ -2328,7 +2330,7 @@ function setCustom(next) { state.custom = typeof next === "function" ? next(stat
 function setDraft(d) { state.draft = d; render(); }
 function setRecipe(r) { state.recipe = r; render(); }
 function setSwap(v) { state.swap = v; state.swapSearch = ""; render(); }
-function setEditEater(id) { state.editEater = id; render(); }
+function setEditEater(id) { state.editEater = id; state.eaterSearch = ""; render(); }
 function setTab(t) { state.tab = t; render(); }
 function toast(m) {
   state.msg = m; render();
@@ -2375,7 +2377,43 @@ function togglePantry(pid) {
 }
 
 /* ---------- отметка «приготовили» ---------- */
-function toggleCooked(key) { setWk({ cooked: { ...state.week.cooked, [key]: !state.week.cooked[key] } }); }
+/* кладовая: количество храним в базовой единице (кг/л/шт), вводим в удобной (г/мл/шт) */
+const PANTRY_UNIT = (u) => u === "кг" ? "г" : u === "л" ? "мл" : u === "пуч" ? "пуч" : "шт";
+const pantryToBase = (u, v) => (u === "кг" || u === "л") ? v / 1000 : v;
+const pantryFromBase = (u, b) => Math.round(((u === "кг" || u === "л") ? b * 1000 : b) * 10) / 10;
+
+function deductFromPantry(key) {
+  const D = derive();
+  const dash = key.indexOf("-");
+  const di = +key.slice(0, dash), m = key.slice(dash + 1);
+  const sl = D.slots[di] && D.slots[di][m];
+  if (!sl || sl.status !== "cook") return;
+  const r = D.res[sl.id]; if (!r) return;
+  const pantry = new Set(state.cfg.pantry || []);
+  const qmap = { ...(state.cfg.pantryQty || {}) };
+  const removed = [], reduced = [];
+  let changed = false;
+  r.items.forEach(([pid, q]) => {
+    if (!pantry.has(pid)) return;
+    const have = qmap[pid];
+    if (typeof have !== "number" || !isFinite(have) || have <= 0) return;   // без числа списать не можем
+    const used = q * D.servings * (sl.mult || 1);
+    const left = have - used;
+    changed = true;
+    if (left <= 1e-6) { pantry.delete(pid); delete qmap[pid]; removed.push(P[pid].n.toLowerCase()); }
+    else { qmap[pid] = left; reduced.push(P[pid].n.toLowerCase()); }
+  });
+  if (!changed) return;
+  state.cfg = { ...state.cfg, pantry: [...pantry], pantryQty: qmap };
+  state.week = { ...state.week, deducted: { ...(state.week.deducted || {}), [key]: true } };
+  persist();
+  toast(removed.length ? ("Кладовая: закончилось — " + removed.join(", ")) : ("Списано из кладовой: " + reduced.join(", ")));
+}
+function toggleCooked(key) {
+  const willCook = !state.week.cooked[key];
+  setWk({ cooked: { ...state.week.cooked, [key]: willCook } });
+  if (willCook && !(state.week.deducted && state.week.deducted[key])) { deductFromPantry(key); render(); }
+}
 
 /* ---------- режим готовки: удержание экрана ---------- */
 let wakeLock = null;
@@ -2542,13 +2580,17 @@ function derive() {
     res[sl.id].items.forEach(([pid, q]) => { agg[pid] = (agg[pid] || 0) + q * servings * sl.mult; });
   }));
   const pantry = new Set(cfg.pantry || []);
+  const pqty = cfg.pantryQty || {};
   const litems = Object.entries(agg).map(([pid, q]) => {
     const pr = P[pid];
-    let rq = roundQty(pr.u, q);
-    const pk = (typeof PACK !== "undefined") && PACK[pid]; if (pk) rq = Math.max(pk, Math.ceil(q / pk) * pk);   // округляем до размера упаковки (яйца десятками, молоко литрами и т.д.)
-    return { pid, name: pr.n, cat: pr.c, qty: rq, unit: pr.u, sum: rq * (prices[pid]?.p ?? pr.p), home: !!week.home[pid] };
+    // в кладовой без числа — считаем, что хватает; с числом — вычитаем остаток
+    const have = pantry.has(pid) ? ((typeof pqty[pid] === "number" && isFinite(pqty[pid]) && pqty[pid] > 0) ? pqty[pid] : Infinity) : 0;
+    const need = Math.max(0, q - have);
+    let rq = roundQty(pr.u, need);
+    const pk = (typeof PACK !== "undefined") && PACK[pid]; if (pk && need > 0) rq = Math.max(pk, Math.ceil(need / pk) * pk);   // округляем до размера упаковки (яйца десятками, молоко литрами и т.д.)
+    return { pid, name: pr.n, cat: pr.c, qty: rq, unit: pr.u, sum: rq * (prices[pid]?.p ?? pr.p), home: !!week.home[pid], partial: pantry.has(pid) && need > 0 };
   });
-  const visible = litems.filter((it) => !pantry.has(it.pid));   // кладовую в список не кладём
+  const visible = litems.filter((it) => it.qty > 0);   // полностью покрытое кладовой в список не кладём
   const cats = {};
   visible.forEach((it) => { (cats[it.cat] = cats[it.cat] || []).push(it); });
   const buy = visible.filter((i) => !i.home);
@@ -2738,7 +2780,7 @@ function screenCook(D) {
   const i = Math.min(Math.max(0, c.step || 0), total - 1);
   const t = c.timer;
   const key = `${c.day}-${d.m}`;
-  const finish = () => { cookClearTimer(); setWk({ cooked: { ...state.week.cooked, [key]: true } }); state.cook = null; releaseWake(); toast("Готово! Отметили «приготовили» ✓"); };
+  const finish = () => { cookClearTimer(); const nd = !(state.week.deducted && state.week.deducted[key]); setWk({ cooked: { ...state.week.cooked, [key]: true } }); if (nd) deductFromPantry(key); state.cook = null; releaseWake(); toast("Готово! Отметили «приготовили» ✓"); };
   const go = (ni) => { if (ni < 0) return; if (ni >= total) { finish(); return; } cookGoStep(ni); };
   const usedSet = new Set(items.map((x) => x[0]));
   const hidStaples = (d.hid || []).filter((pid) => P[pid] && !usedSet.has(pid));
@@ -3259,9 +3301,14 @@ function screenEater(D) {
     )), { marginBottom: "24px", overflow: "hidden" }),
   ] : null;
 
-  const catBlocks = Object.entries(cats).map(([cat, items]) => h("div", { style: { marginBottom: "20px" } },
-    h("div", { style: { fontSize: "12px", marginBottom: "8px", color: C.mute } }, cat),
-    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, items.map(([id, pr]) => Chip(pr.n, !!dis[id], () => toggle(id))))));
+  const sq = (state.eaterSearch || "").toLowerCase().trim();
+  const catBlocks = Object.entries(cats).map(([cat, items]) => {
+    const fitems = sq ? items.filter(([id, pr]) => pr.n.toLowerCase().includes(sq)) : items;
+    if (!fitems.length) return null;
+    return h("div", { style: { marginBottom: "20px" } },
+      h("div", { style: { fontSize: "12px", marginBottom: "8px", color: C.mute } }, cat),
+      h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, fitems.map(([id, pr]) => Chip(pr.n, !!dis[id], () => toggle(id)))));
+  }).filter(Boolean);
 
   return h("div", { class: "inner" },
     backLink("← Настройки", () => setEditEater(null)),
@@ -3269,7 +3316,12 @@ function screenEater(D) {
     h("p", { style: { fontSize: "14px", margin: "0 0 24px", color: C.mute } }, "Блюда не пропадут — приложение подставит замену или не положит продукт."),
     strictBlock,
     eyebrow("Отметьте продукты"),
-    catBlocks,
+    h("div", { style: { position: "relative", marginBottom: "16px" } },
+      h("input", { value: state.eaterSearch || "", placeholder: "🔍 Найти продукт…", "data-fkey": "eatersearch",
+        onInput: (ev) => { state.eaterSearch = ev.target.value; render(); },
+        style: { width: "100%", boxSizing: "border-box", borderRadius: "12px", padding: "12px 40px 12px 14px", fontSize: "15px", background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink } }),
+      state.eaterSearch ? h("button", { onClick: () => { state.eaterSearch = ""; render(); }, style: { position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "16px", color: C.mute, background: "none", border: "none", padding: "4px 8px" } }, "✕") : null),
+    catBlocks.length ? catBlocks : h("div", { style: { fontSize: "14px", color: C.mute, padding: "4px 0 20px" } }, "Ничего не нашлось."),
     card(`Доступно блюд с учётом всех предпочтений: ${available} из ${ALL.length}`, { padding: "16px", marginTop: "8px", fontSize: "14px", color: C.mute }),
   );
 }
@@ -3288,15 +3340,17 @@ function screenPantry() {
       h("button", { onClick: () => togglePantry(id), style: { display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0, textAlign: "left" } },
         h("span", { style: { width: "24px", height: "24px", borderRadius: "8px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", color: "#fff", background: on ? C.green : "transparent", border: `1.5px solid ${on ? C.green : C.line}` } }, on ? "✓" : ""),
         h("span", { style: { fontSize: "15px", fontWeight: on ? 700 : 500, color: on ? C.green : C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, pr.n)),
-      on ? h("input", { value: qty[id] || "", placeholder: ph(pr.u), "data-fkey": "pq-" + id,
-        onInput: (ev) => setCfg({ ...cfg, pantryQty: { ...(cfg.pantryQty || {}), [id]: ev.target.value } }),
-        style: { width: "110px", flexShrink: 0, borderRadius: "10px", padding: "9px 10px", fontSize: "14px", textAlign: "right", fontWeight: 600, background: C.card, border: `1.5px solid ${C.green}` } }) : null);
+      on ? h("div", { style: { display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 } },
+        h("input", { value: (typeof qty[id] === "number" ? String(pantryFromBase(pr.u, qty[id])) : ""), placeholder: "сколько", inputmode: "decimal", "data-fkey": "pq-" + id,
+          onInput: (ev) => { const nq = { ...(cfg.pantryQty || {}) }; const v = parseFloat(String(ev.target.value).replace(",", ".")); if (isFinite(v) && v > 0) nq[id] = pantryToBase(pr.u, v); else delete nq[id]; setCfg({ ...cfg, pantryQty: nq }); },
+          style: { width: "76px", borderRadius: "10px", padding: "9px 10px", fontSize: "14px", textAlign: "right", fontWeight: 600, background: C.card, border: `1.5px solid ${C.green}` } }),
+        h("span", { style: { fontSize: "13px", color: C.green, fontWeight: 600, minWidth: "22px" } }, PANTRY_UNIT(pr.u))) : null);
   };
   return h("div", { class: "inner" },
     backLink("← Назад", () => { state.pantryOpen = false; render(); }),
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🥫 Кладовая"),
     h("p", { style: { fontSize: "14px", margin: "0 0 14px", color: C.mute } },
-      "Нажмите на продукт, что всегда есть дома — он не появится в списке покупок. Рядом с отмеченным сразу впишите, сколько осталось (шт, граммы или литры)."),
+      "Отметьте продукты, что есть дома — уберём их из списка покупок. Впишите количество (необязательно) — тогда посчитаем, сколько докупить, и спишем автоматически после «Приготовили»."),
     h("div", { style: { position: "relative", marginBottom: "16px" } },
       h("input", { value: state.pantrySearch, placeholder: "🔍 Найти продукт…", "data-fkey": "pantrysearch",
         onInput: (ev) => { state.pantrySearch = ev.target.value; render(); },
@@ -3488,7 +3542,7 @@ function screenPlan(D) {
         h("span", { style: { minWidth: 0 } },
           h("span", { class: "disp", style: { fontSize: "12px", color: C.green, fontWeight: 600 } }, DAYS_S[di], today ? h("span", { style: { marginLeft: "6px", fontFamily: "'Onest',sans-serif", fontSize: "10px", background: C.green, color: "#fff", borderRadius: "6px", padding: "1px 6px", letterSpacing: 0 } }, "СЕГОДНЯ") : null),
           h("span", { style: { display: "block", fontWeight: 600, fontSize: "15px", marginTop: "2px" } }, DAYS[di])),
-        h("button", { onClick: () => setWk({ seed: week.seed + 13, overrides: {}, skipped: {}, batch: {}, cooked: {} }),
+        h("button", { onClick: () => setWk({ seed: week.seed + 13, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {} }),
           style: { flexShrink: 0, borderRadius: "9999px", padding: "9px 14px", fontSize: "13px", fontWeight: 700, textAlign: "center", background: C.greenSoft, color: C.green, border: `1.5px solid ${C.green}` } }, "🔄 Пересобрать"),
         h("span", { style: { textAlign: "right", flexShrink: 0 } },
           h("span", { class: "disp", style: { fontSize: "16px", fontWeight: 800 } }, money(dayCost(di))),
@@ -3545,7 +3599,7 @@ function screenList(D) {
           style: { width: "20px", height: "20px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", color: "#fff", flexShrink: 0, background: done ? C.green : "transparent", border: `1.5px solid ${done ? C.green : C.line}` } }, done ? "✓" : ""),
         h("span", { style: { flex: 1, minWidth: 0, textDecoration: done ? "line-through" : "none", color: done ? C.mute : C.ink } },
           h("span", { style: { display: "block", fontSize: "15px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, it.name),
-          h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, fmtQty(it.unit, it.qty))),
+          h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, fmtQty(it.unit, it.qty), it.partial ? h("span", { style: { color: C.green } }, " · остаток, часть есть дома") : null)),
         h("button", { onClick: () => setWk({ home: { ...week.home, [it.pid]: !week.home[it.pid] } }),
           style: { borderRadius: "9999px", padding: "4px 10px", fontSize: "11px", flexShrink: 0, background: it.home ? C.greenSoft : "transparent", color: it.home ? C.green : C.mute, border: `1px solid ${it.home ? C.green : C.line}` } }, "есть дома"),
         h("span", { style: { fontSize: "14px", fontWeight: 600, width: "64px", textAlign: "right", flexShrink: 0 } }, money(it.sum)));
