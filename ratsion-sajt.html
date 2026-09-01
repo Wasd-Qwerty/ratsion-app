@@ -2295,7 +2295,7 @@ let state = {
     budget: 45000, mode: "diet", store: "magnum",
     meals: { breakfast: true, lunch: true, snack: true, dinner: true, drink: true },
     drinksPerDay: 2, snacksPerDay: 1,
-    favorites: [], banned: [], pantry: [], pantryQty: {}, photos: {}, customProducts: [], onboarded: false, theme: "light",
+    favorites: [], banned: [], pantry: [], pantryQty: {}, photos: {}, customProducts: [], onboarded: false, phoneAsked: false, theme: "light",
     allergens: [], equip: ["Плита", "Духовка", "Микроволновка", "Блендер"],
     eaters: [
       { id: "e1", name: "Я", child: false, sex: "f", age: 32, height: 159, weight: 57.5, activity: "mid", tk: 1300, tb: 90, tj: 45, tu: 145, dislikes: {} },
@@ -2339,6 +2339,7 @@ function load() {
       // кладовая: оставляем только числовые количества (старые текстовые заметки убираем — теперь вводим числом)
       if (state.cfg.pantryQty) { const nq = {}; for (const k in state.cfg.pantryQty) { const v = state.cfg.pantryQty[k]; if (typeof v === "number" && isFinite(v) && v > 0) nq[k] = v; } state.cfg.pantryQty = nq; }
       if (s.cfg.onboarded === undefined) state.cfg.onboarded = true;   // у старых пользователей уже всё настроено — мастер не показываем
+      if (s.cfg.phoneAsked === undefined) state.cfg.phoneAsked = !!state.cfg.onboarded;   // старым номер уже не навязываем
     }
     if (s.prices) state.basePrices = { ...state.basePrices, ...s.prices };
     if (s.week) state.week = { seed: 7, overrides: {}, skipped: {}, batch: {}, home: {}, bought: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {}, ...s.week };
@@ -4474,8 +4475,11 @@ async function doLogin(phoneRaw) {
   try { localStorage.setItem(PHONE_KEY, digits); } catch (_) {}
   const r = await supaRPC("ratsion_load", { p_phone: digits, p_edition: EDITION });
   if (r.ok && r.data) { applyDataBlob(r.data); persist(); toast("С возвращением! Данные загружены"); }
-  else { cloudSaveNow(); persist(); toast("Готово — данные теперь в аккаунте"); }
+  else { cloudSaveNow(); persist(); toast("Готово — номер сохранён"); }
+  state.cfg.phoneAsked = true;
   state.loginOpen = false; state.loginInput = "";
+  if (!state.cfg.onboarded) { state.onboard = 0; state.tab = "settings"; }   // после номера — мастер настройки (новый пользователь)
+  persist();
   render();
 }
 function doLogout() {
@@ -4488,17 +4492,23 @@ function doLogout() {
 
 /* ---------- экран: вход по номеру ---------- */
 function screenLogin() {
+  const firstRun = !state.cfg.phoneAsked && !state.phone;   // самый первый заход — без «Назад»
+  const skip = () => {
+    state.cfg.phoneAsked = true; state.loginOpen = false;
+    if (!state.cfg.onboarded) { state.onboard = 0; state.tab = "settings"; }
+    persist(); render();
+  };
   return h("div", { class: "inner" },
-    backLink("← Назад", () => { state.loginOpen = false; render(); }),
+    firstRun ? null : backLink("← Назад", () => { state.loginOpen = false; render(); }),
     h("div", { style: { fontSize: "48px", textAlign: "center", marginTop: "16px", marginBottom: "8px" } }, "📱"),
-    h("h2", { class: "disp", style: { fontSize: "26px", textAlign: "center", margin: "0 0 8px" } }, "Вход по номеру"),
-    h("p", { style: { fontSize: "14px", textAlign: "center", margin: "0 0 24px", color: C.mute, lineHeight: 1.5 } }, "Введите номер телефона — и ваши настройки, кладовая и меню будут доступны на любом телефоне. Без паролей и кодов."),
+    h("h2", { class: "disp", style: { fontSize: "26px", textAlign: "center", margin: "0 0 8px" } }, firstRun ? "Ваш номер телефона" : "Вход по номеру"),
+    h("p", { style: { fontSize: "14px", textAlign: "center", margin: "0 0 24px", color: C.mute, lineHeight: 1.5 } }, "Введите номер один раз — меню, покупки и настройки сохранятся и будут доступны на любом вашем телефоне. Без паролей и кодов из SMS."),
     h("input", { value: state.loginInput || "", placeholder: "+7 900 123-45-67", inputmode: "tel", "data-fkey": "loginphone",
       onInput: (ev) => { state.loginInput = ev.target.value; },
       style: { width: "100%", boxSizing: "border-box", borderRadius: "14px", padding: "16px", fontSize: "18px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.green}`, marginBottom: "14px" } }),
-    Btn("Войти", () => doLogin(state.loginInput)),
-    h("div", { style: { marginTop: "10px" } }, Btn("Пока без входа (только это устройство)", () => { state.loginOpen = false; render(); }, "ghost")),
-    h("p", { style: { fontSize: "12px", textAlign: "center", marginTop: "16px", color: C.mute, lineHeight: 1.5 } }, "Данные видит только тот, кто знает номер. Никаких SMS и паролей не нужно."));
+    Btn(firstRun ? "Сохранить номер" : "Войти", () => doLogin(state.loginInput)),
+    h("div", { style: { marginTop: "10px" } }, Btn(firstRun ? "Пропустить — только на этом телефоне" : "Пока без входа (только это устройство)", skip, "ghost")),
+    h("p", { style: { fontSize: "12px", textAlign: "center", marginTop: "16px", color: C.mute, lineHeight: 1.5 } }, "Номер видит только тот, кто его знает. Никаких SMS и паролей не нужно."));
 }
 
 /* ---------- старт ---------- */
@@ -4506,7 +4516,9 @@ load();
 try { state.phone = localStorage.getItem(PHONE_KEY) || null; } catch (_) {}
 state.storageBlocked = !storageWorks();
 (state.cfg.customProducts || []).forEach((cp) => { if (cp && cp.id && !P[cp.id]) { P[cp.id] = { n: cp.n, u: cp.u || "шт", p: cp.p || 0, c: cp.c || "Моё", nu: cp.nu || [0, 0, 0, 0] }; if (!state.basePrices[cp.id]) state.basePrices[cp.id] = { p: cp.p || 0, updated: TODAY() }; } });
-if (!state.cfg.onboarded) { state.onboard = 0; state.tab = "settings"; }   // новый пользователь — сначала мастер настройки
+if (state.phone) state.cfg.phoneAsked = true;   // уже вошли — номер не спрашиваем
+if (!state.phone && !state.cfg.phoneAsked) { state.loginOpen = true; }   // первый заход — сразу спросить номер телефона
+else if (!state.cfg.onboarded) { state.onboard = 0; state.tab = "settings"; }   // потом — мастер настройки
 state.loaded = true;
 render();
 if (typeof location !== "undefined") cloudInit();   // подтягиваем облачные цены и (если вошли) данные аккаунта; на артефакте тихо остаёмся локально
