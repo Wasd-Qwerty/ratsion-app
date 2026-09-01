@@ -5150,9 +5150,9 @@ function screenPlan(D) {
           h("span", { style: { textAlign: "right", flexShrink: 0 } },
             h("span", { class: "disp", style: { fontSize: "16px", fontWeight: 800 } }, money(dayCost(di))),
             h("span", { style: { display: "block", fontSize: "11px", color: C.mute } }, cooking ? `готовим ${cooking}×` : "не готовим"))),
-        h("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: "8px" } },
+        h("div", { style: { display: "flex", justifyContent: "center", marginTop: "8px" } },
           h("button", { onClick: () => setWk({ seed: week.seed + 13, avoid: curDishes, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} }),
-            style: { borderRadius: "9999px", padding: "6px 12px", fontSize: "11.5px", fontWeight: 700, background: C.greenSoft, color: C.green, border: `1px solid ${C.green}` } }, "🔄 Пересобрать"))),
+            style: { borderRadius: "9999px", padding: "6px 14px", fontSize: "11.5px", fontWeight: 700, background: C.greenSoft, color: C.green, border: `1px solid ${C.green}` } }, "🔄 Пересобрать"))),
       mealRows, nutriBlock);
   });
 
