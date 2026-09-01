@@ -976,16 +976,25 @@ function portionTargets(cfg) {
   return { k: solve("k"), b: solve("b"), j: solve("j"), u: solve("u") };
 }
 
-function buildPlan(cfg, prices, seed, all = DISHES, servingsIn) {
+function buildPlan(cfg, prices, seed, all = DISHES, servingsIn, opts = {}) {
   const servings = servingsIn || cfg.eaters.reduce((s, e) => s + (e.child ? 0.7 : 1), 0);
   const meals = MEAL_ORDER.filter((m) => cfg.meals[m]);
+  const budgetK = opts.budgetK || 1;
+  const maxTime = opts.maxTime || 0;
+  const avoid = opts.avoid || null;
+  const kidFriendly = !!opts.kidFriendly;
+  const KID_BAD = /остр|чили|карри|том-?ям|кимчи|анчоус|каперс|оливк|маслин|тофу|морепродукт|креветк|кальмар|мидии|печень|грибн|с грибами|васаби|горчиц|бастурм/i;
+  const passExtra = (d) => (!maxTime || (d.t || 999) <= maxTime) && (!kidFriendly || !KID_BAD.test(d.n || ""));
   const T = portionTargets(cfg);
-  const budgetPortionDay = cfg.budget / 7 / Math.max(servings, 0.1);
+  if (opts.proteinBoost) T.b = Math.round(T.b * 1.25);
+  const budgetPortionDay = (cfg.budget * budgetK) / 7 / Math.max(servings, 0.1);
 
   // готовим кандидатов: состав с учётом персональных замен, КБЖУ и цена
   const pools = {};
   meals.forEach((m) => {
-    pools[m] = shuffle(all.filter((d) => d.m === m && fits(d, cfg)), rnd(seed + m.length * 97))
+    let cand = all.filter((d) => d.m === m && fits(d, cfg) && passExtra(d));
+    if (cand.length < 2) cand = all.filter((d) => d.m === m && fits(d, cfg));
+    pools[m] = shuffle(cand, rnd(seed + m.length * 97))
       .map((d) => {
         const items = resolve(d, cfg.eaters).items;
         const per = PER_DAY[m] ? (cfg[PER_DAY[m]] || 1) : 1;
@@ -1052,7 +1061,7 @@ function buildPlan(cfg, prices, seed, all = DISHES, servingsIn) {
           j: tot.j + c.j + restAvg.j, u: tot.u + c.u + restAvg.u,
           price: tot.price + c.price + restAvg.price,
         };
-        const sc = penalty(projected) + (ago < 5 ? 0.05 : 0) - (c.fav ? 0.9 : 0) + (jitterRng() - 0.5) * 0.6;
+        const sc = penalty(projected) + (ago < 5 ? 0.05 : 0) - (c.fav ? 0.9 : 0) + (avoid && avoid.has(c.d.id) ? 0.7 : 0) + (jitterRng() - 0.5) * 0.6;
         if (!best || sc < best.sc) best = { c, sc };
       });
       if (!best) best = { c: pools[m][di % pools[m].length] };
@@ -1071,7 +1080,7 @@ function buildPlan(cfg, prices, seed, all = DISHES, servingsIn) {
     .reduce((x, [m, id]) => x + (pools[m].find((c) => c.d.id === id)?.price || 0), 0), 0) * servings;
 
   let guard = 0;
-  while (weekPrice(plan) > cfg.budget && guard++ < 80) {
+  while (weekPrice(plan) > cfg.budget * budgetK && guard++ < 80) {
     let best = null;
     plan.forEach((day, di) => Object.entries(day).forEach(([m, id]) => {
       const cur = pools[m].find((c) => c.d.id === id);
@@ -2267,7 +2276,7 @@ function h(tag, props, ...kids) {
 
 /* ---------- состояние ---------- */
 let state = {
-  loaded: false, tab: "plan", recipe: null, editEater: null, draft: null,
+  loaded: false, tab: "today", recipe: null, editEater: null, draft: null,
   freeRecipe: null, uniqueOpen: false, have: {}, deck: null, surprise: false, onboard: null, priceSearch: "", planDay: null, haveSearch: "", storeOpen: false, pantrySearch: "", swap: null, swapSearch: "",
   msg: null, restoreText: "", priceImportOpen: false, priceImportText: "", storageBlocked: false, favoritesOpen: false, eaterSearch: "", phone: null, cloud: false, loginOpen: false, loginInput: "", buyFix: null, buyFixSearch: "",
   savedWeeks: [], pricePack: PRICE_PACK, pricesTouched: false, cook: null, pantryOpen: false,
@@ -2347,6 +2356,18 @@ function applyTheme() {
 }
 function setTheme(t) { state.cfg = { ...state.cfg, theme: t }; persist(); applyTheme(); render(); }
 function setWk(patch) { state.week = { ...state.week, ...patch }; persist(); render(); }
+const WEEK_TEMPLATES = [
+  { id: "", n: "Обычная", tmpl: {} },
+  { id: "fast", n: "⚡ Быстрая", tmpl: { maxTime: 20 } },
+  { id: "cheap", n: "💰 Бюджетная", tmpl: { budgetK: 0.8 } },
+  { id: "kids", n: "🧒 Детская", tmpl: { kidFriendly: true } },
+  { id: "protein", n: "💪 Больше белка", tmpl: { proteinBoost: true } },
+];
+// применяем шаблон: запоминаем текущие блюда (чтобы новое меню отличалось) и пересобираем
+function applyTemplate(t, curDishes) {
+  setWk({ tmpl: { ...t.tmpl, id: t.id }, avoid: curDishes || [], seed: state.week.seed + 7,
+    overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} });
+}
 function setPrices(next) { state.basePrices = typeof next === "function" ? next(state.basePrices) : next; persist(); render(); }
 function setCustom(next) { state.custom = typeof next === "function" ? next(state.custom) : next; persist(); render(); }
 function setDraft(d) { state.draft = d; render(); }
@@ -2549,7 +2570,9 @@ function derive() {
   const roughServings = cfg.eaters.reduce((acc, e) => acc + Math.min(1.6, Math.max(0.4, targets(e).k / 1800)), 0);
 
   const poolDishes = ALL.filter((d) => !(cfg.banned || []).includes(d.id));
-  const base = buildPlan(cfg, prices, week.seed, poolDishes, roughServings);
+  const tmpl = week.tmpl || {};
+  const planOpts = { maxTime: tmpl.maxTime || 0, budgetK: tmpl.budgetK || 1, proteinBoost: !!tmpl.proteinBoost, kidFriendly: !!tmpl.kidFriendly, avoid: (week.avoid && week.avoid.length) ? new Set(week.avoid) : null };
+  const base = buildPlan(cfg, prices, week.seed, poolDishes, roughServings, planOpts);
   Object.entries(week.overrides).forEach(([kk, id]) => {
     const [di, m] = kk.split("-");
     if (base[+di] && base[+di][m] !== undefined) base[+di][m] = id;
@@ -3090,7 +3113,8 @@ function screenFavorites(D) {
 function rollSurprise(m, D) {
   const cfg = state.cfg, week = state.week;
   const avail = new Set([...(cfg.pantry || []), ...Object.keys(week.bought || {}).filter((k) => week.bought[k]), ...Object.keys(week.home || {}).filter((k) => week.home[k])]);
-  const pool = D.ALL.filter((x) => x.m === m && fits(x, cfg) && !isBanned(x.id));
+  let pool = D.ALL.filter((x) => x.m === m && fits(x, cfg) && !isBanned(x.id));
+  if (state.quickOnly) { const q = pool.filter((x) => (x.t || 999) <= 20); if (q.length) pool = q; }
   if (!pool.length) { toast("Нет подходящих блюд на этот приём — включите технику в настройках"); return; }
   const full = pool.filter((d) => d.i.every(([id]) => avail.has(id)));
   const near = pool.filter((d) => d.i.filter(([id]) => !avail.has(id)).length <= 2);
@@ -3111,6 +3135,8 @@ function screenSurprise(D) {
     h("p", { style: { fontSize: "14px", textAlign: "center", margin: "0 0 6px", color: C.mute } }, "На какой приём пищи? Подберём случайное блюдо."),
     h("p", { style: { fontSize: "13px", textAlign: "center", margin: "0 0 24px", color: C.green } },
       availCount ? `Сначала — из ваших продуктов (отмечено дома/куплено: ${availCount})` : "Отметьте «есть дома» в списке покупок или в кладовой — и подберём из ваших продуктов"),
+    h("div", { style: { display: "flex", justifyContent: "center", marginBottom: "18px" } },
+      Chip("⚡ Только быстрые · до 20 мин", !!state.quickOnly, () => { state.quickOnly = !state.quickOnly; render(); })),
     h("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
       meals.map(([m, l]) => h("button", { onClick: () => rollSurprise(m, D),
         style: { width: "100%", borderRadius: "16px", padding: "18px 20px", fontSize: "17px", fontWeight: 700, textAlign: "left", background: C.card, color: C.ink, border: `1.5px solid ${C.line}` } }, l))),
@@ -3305,18 +3331,22 @@ function screenUnique(D) {
   const cats = {};
   Object.entries(P).forEach(([id, pr]) => { (cats[pr.c] = cats[pr.c] || []).push([id, pr]); });
   const haveSet = new Set(Object.keys(have));
-  const matches = ALL.filter((d) => d.i.length >= 2 && fits(d, state.cfg) && !isBanned(d.id)).map((d) => {
+  let matches = ALL.filter((d) => d.i.length >= 2 && fits(d, state.cfg) && !isBanned(d.id)).map((d) => {
     const missing = d.i.map(([id]) => id).filter((id) => !haveAny(id, avail));
     const usesHave = d.i.some(([id]) => haveAny(id, haveSet));   // блюдо использует выбранный продукт (с учётом замен)
     return { d, missing, usesHave };
-  }).filter((m) => m.usesHave && m.missing.length <= 2)
+  }).filter((m) => m.usesHave && m.missing.length <= 2);
+  if (state.quickOnly) { const q = matches.filter((m) => (m.d.t || 999) <= 20); if (q.length) matches = q; }
+  matches = matches
     .sort((a, b) => a.missing.length - b.missing.length || (a.d.t || 0) - (b.d.t || 0))
     .slice(0, 40);
   const startDeck = () => { state.deck = { ids: matches.map((m) => m.d.id), miss: Object.fromEntries(matches.map((m) => [m.d.id, m.missing])), i: 0 }; render(); };
   return h("div", { class: "inner" },
     backLink("← Неделя", () => { state.uniqueOpen = false; state.deck = null; render(); }),
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🧺 Из моих продуктов"),
-    h("p", { style: { fontSize: "14px", margin: "0 0 16px", color: C.mute } }, "Отметьте продукты, что есть дома. Дальше листайте карточки блюд: вправо (или «Готовить») — покажем рецепт, влево — «не хочу», следующее. Кладовая учитывается сама."),
+    h("p", { style: { fontSize: "14px", margin: "0 0 12px", color: C.mute } }, "Отметьте продукты, что есть дома. Дальше листайте карточки блюд: вправо (или «Готовить») — покажем рецепт, влево — «не хочу», следующее. Кладовая учитывается сама."),
+    h("div", { style: { marginBottom: "16px" } },
+      Chip("⚡ Только быстрые · до 20 мин", !!state.quickOnly, () => { state.quickOnly = !state.quickOnly; render(); })),
     chosen ? h("div", { style: { position: "sticky", top: 0, zIndex: 5, paddingBottom: "12px", marginBottom: "8px", background: C.paper } },
       Btn(matches.length ? `Показать блюда (${matches.length}) →` : "Пока ничего не собирается — отметьте ещё", matches.length ? startDeck : () => toast("Отметьте продукты, которые есть дома")),
       h("button", { onClick: () => { state.have = {}; render(); }, style: { display: "block", width: "100%", marginTop: "8px", fontSize: "13px", color: C.mute, textAlign: "center" } }, "Очистить выбор")) : null,
@@ -3584,12 +3614,73 @@ function screenDraft(D) {
 }
 
 /* ---------- экран: неделя ---------- */
+function screenToday(D) {
+  const { ALL, res, dishCost, slots, servings, dayBase, share, dayCost } = D;
+  const cfg = state.cfg, week = state.week;
+  const ti = todayIdx();
+  const day = slots[ti] || {};
+  const rows = MEAL_ORDER.filter((m) => day[m] && day[m].status !== "skip");
+  const cookN = Object.values(day).filter((s) => s.status === "cook").length;
+
+  const mealCards = rows.map((m) => {
+    const sl = day[m];
+    const d = ALL.find((x) => x.id === sl.id);
+    if (!d) return null;
+    const key = `${ti}-${m}`;
+    const cook = sl.status === "cook";
+    const cooked = !!week.cooked[key] && cook;
+    const leftover = sl.status === "leftover";
+    return h("div", { style: { borderRadius: "18px", overflow: "hidden", background: C.card, border: `1.5px solid ${cooked ? C.green : C.line}`, boxShadow: C.cardShadow, marginBottom: "14px" } },
+      h("button", { onClick: () => setRecipe({ id: sl.id, day: ti }), style: { width: "100%", textAlign: "left", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "center" } },
+        h("span", { style: { fontSize: "34px", lineHeight: 1, flexShrink: 0 } }, d.ic),
+        h("span", { style: { flex: 1, minWidth: 0 } },
+          h("span", { style: { display: "block", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.green, fontWeight: 700 } }, MEALS[m] + (leftover ? " · остатки" : "") + (PER_DAY[m] && sl.per > 1 ? ` · ${sl.per}×` : "")),
+          h("span", { style: { display: "block", fontSize: "17px", fontWeight: 600, marginTop: "2px", color: cooked ? C.green : C.ink } }, (cooked ? "✓ " : "") + (isFav(sl.id) ? "❤️ " : "") + d.n),
+          h("span", { style: { display: "block", fontSize: "12px", marginTop: "3px", color: C.mute } }, `${d.t} мин · ${Math.round(nutri(d.i).k)} ккал/порц.`)),
+        h("span", { style: { fontSize: "20px", color: C.mute, flexShrink: 0 } }, "›")),
+      cook ? h("div", { style: { display: "flex", gap: "8px", padding: "0 18px 16px", flexWrap: "wrap" } },
+        (d.st && d.st.length) ? h("button", { onClick: () => startCook(d.id, ti), style: { flex: 1, minWidth: "150px", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 700, background: C.green, color: "#fff", border: "none" } }, "👨‍🍳 Готовить по шагам") : null,
+        Mini(cooked ? "✓ Приготовили" : "Приготовили", () => toggleCooked(key), cooked, true)) : null);
+  }).filter(Boolean);
+
+  const dn = dayBase(ti);
+  const nutriCard = dn.k ? card([
+    eyebrow("За день на человека", { marginBottom: "10px" }),
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+      cfg.eaters.map((e) => {
+        const t = targets(e), f = share(e), got = dn.k * f;
+        const pct = Math.min(100, got / t.k * 100), wide = Math.abs(got - t.k) > t.k * 0.15;
+        return h("div", null,
+          h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" } },
+            h("span", { style: { color: C.ink } }, `${e.name} · порция ${f}`),
+            h("span", { style: { color: wide ? C.amber : C.mute } }, `${Math.round(got)} / ${t.k} ккал`)),
+          h("div", { style: { height: "6px", borderRadius: "9999px", overflow: "hidden", background: C.line } },
+            h("div", { style: { height: "100%", borderRadius: "9999px", width: `${pct}%`, background: wide ? C.amber : C.fresh } })));
+      })),
+  ], { padding: "16px", marginBottom: "14px" }) : null;
+
+  return [
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "0 0 4px" } },
+      h("h2", { class: "disp", style: { fontSize: "26px", margin: 0 } }, "☀️ Сегодня"),
+      h("span", { class: "disp", style: { fontSize: "15px", color: C.green, fontWeight: 700 } }, DAYS[ti])),
+    h("div", { style: { fontSize: "13px", marginBottom: "18px", color: C.mute } },
+      cookN ? `Готовим ${cookN} ${cookN === 1 ? "блюдо" : "блюда"} · ${money(dayCost(ti))} за день` : "На сегодня готовки нет"),
+    mealCards.length ? h("div", null, mealCards) : h("div", { style: { textAlign: "center", color: C.mute, padding: "36px 0" } }, "На сегодня всё едите не дома или пропущено."),
+    nutriCard,
+    h("div", { style: { display: "flex", gap: "10px", marginTop: "4px" } },
+      h("button", { onClick: () => setTab("plan"), style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.greenSoft, border: `1.5px solid ${C.green}`, color: C.green } }, "📅 Вся неделя →"),
+      h("button", { onClick: () => { state.surprise = true; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.line}`, color: C.ink } }, "🎲 Сюрприз")),
+  ];
+}
+
 function screenPlan(D) {
   const { ALL, res, dishCost, slots, share, servings, dayCost, planTotal, dayBase, stale, k } = D;
   const cfg = state.cfg, week = state.week;
   const ti = todayIdx();
   const sel = state.planDay == null ? ti : state.planDay;
   const goToday = () => { state.planDay = ti; render(); };
+  const curDishes = [...new Set(slots.flatMap((day) => Object.values(day).map((s) => s.id).filter(Boolean)))];
+  const curTmpl = (week.tmpl && week.tmpl.id) || "";
 
   const storeCard = card([
     eyebrow("Где покупать", { marginBottom: "10px" }),
@@ -3672,7 +3763,7 @@ function screenPlan(D) {
         h("span", { style: { minWidth: 0 } },
           h("span", { class: "disp", style: { fontSize: "12px", color: C.green, fontWeight: 600 } }, DAYS_S[di], today ? h("span", { style: { marginLeft: "6px", fontFamily: "'Onest',sans-serif", fontSize: "10px", background: C.green, color: "#fff", borderRadius: "6px", padding: "1px 6px", letterSpacing: 0 } }, "СЕГОДНЯ") : null),
           h("span", { style: { display: "block", fontWeight: 600, fontSize: "15px", marginTop: "2px" } }, DAYS[di])),
-        h("button", { onClick: () => setWk({ seed: week.seed + 13, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} }),
+        h("button", { onClick: () => setWk({ seed: week.seed + 13, avoid: curDishes, overrides: {}, skipped: {}, batch: {}, cooked: {}, deducted: {}, prodSwap: {}, skipBuy: {} }),
           style: { flexShrink: 0, borderRadius: "9999px", padding: "9px 14px", fontSize: "13px", fontWeight: 700, textAlign: "center", background: C.greenSoft, color: C.green, border: `1.5px solid ${C.green}` } }, "🔄 Пересобрать"),
         h("span", { style: { textAlign: "right", flexShrink: 0 } },
           h("span", { class: "disp", style: { fontSize: "16px", fontWeight: 800 } }, money(dayCost(di))),
@@ -3703,6 +3794,10 @@ function screenPlan(D) {
       h("button", { onClick: saveWeek, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "♡ Сохранить"),
       h("button", { onClick: () => shareMenu(D), style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "⇪ Отправить"),
       h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`)),
+    h("div", { style: { marginBottom: "14px" } },
+      h("div", { style: { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.mute, marginBottom: "8px" } }, "Набор недели"),
+      h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+        WEEK_TEMPLATES.map((t) => Chip(t.n, curTmpl === t.id, () => applyTemplate(t, curDishes))))),
     h("div", { style: { display: "flex", gap: "10px", marginBottom: "14px" } },
       h("button", { onClick: () => { state.surprise = true; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.card, border: `1.5px solid ${C.line}`, color: C.ink } }, "🎲 Сюрприз-рецепт"),
       h("button", { onClick: () => { state.uniqueOpen = true; state.deck = null; render(); }, style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.greenSoft, border: `1.5px solid ${C.green}`, color: C.green } }, "✨ Из моих продуктов")),
@@ -4093,9 +4188,10 @@ const NAV_ICONS = {
   list: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5H5l2.2 11a1.2 1.2 0 0 0 1.2 1h8.4a1.2 1.2 0 0 0 1.2-.9L21 8H6"/></svg>',
   prices: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V4.5A1.5 1.5 0 0 1 4.5 3h7.7a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.8" cy="7.8" r="1.2"/></svg>',
   settings: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-6M4 11V3M12 21v-8M12 9V3M20 21v-4M20 13V3"/><path d="M2 15h4M10 9h4M18 17h4"/></svg>',
+  today: '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
 };
 function nav(D) {
-  const items = [["plan", "Неделя"], ["list", "Покупки"], ["prices", "Цены"], ["settings", "Настройки"]];
+  const items = [["today", "Сегодня"], ["plan", "Неделя"], ["list", "Покупки"], ["prices", "Цены"], ["settings", "Настройки"]];
   return h("div", { class: "navbar", style: { background: C.card, borderTop: `1px solid ${C.line}` } },
     h("div", { style: { margin: "0 auto", maxWidth: "448px", display: "flex", gap: "4px", padding: "6px 8px" } },
       items.map(([key, label]) => {
@@ -4131,7 +4227,8 @@ function view() {
   if (state.editEater) return screenEater(D);
   if (state.draft) return screenDraft(D);
   let screen;
-  if (state.tab === "plan") screen = screenPlan(D);
+  if (state.tab === "today") screen = screenToday(D);
+  else if (state.tab === "plan") screen = screenPlan(D);
   else if (state.tab === "list") screen = screenList(D);
   else if (state.tab === "prices") screen = screenPrices(D);
   else screen = screenSettings(D);
