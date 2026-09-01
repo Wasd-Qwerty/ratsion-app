@@ -4959,7 +4959,8 @@ function screenToday(D) {
     h("div", { onScroll: (ev) => { const el = ev.currentTarget; const w = el.clientWidth || 1; const idx = Math.round(el.scrollLeft / w); const dots = el.parentElement.querySelectorAll("[data-daydot]"); dots.forEach((dt, i) => { dt.style.background = i === idx ? C.green : C.line; dt.style.width = i === idx ? "20px" : "7px"; }); },
       style: { display: "flex", gap: "12px", overflowX: "auto", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", paddingBottom: "2px" } }, mealCards),
     mealCards.length > 1 ? h("div", { style: { display: "flex", gap: "6px", justifyContent: "center", marginTop: "12px" } }, mealCards.map((_, i) => h("span", { "data-daydot": "1", style: { width: i === 0 ? "20px" : "7px", height: "7px", borderRadius: "9999px", background: i === 0 ? C.green : C.line, transition: "all .2s", display: "block" } }))) : null,
-    mealCards.length > 1 ? h("div", { style: { fontSize: "11.5px", textAlign: "center", marginTop: "8px", color: C.mute } }, "← смахните, чтобы листать приёмы →") : null
+    mealCards.length > 1 ? h("div", { style: { textAlign: "center", marginTop: "12px" } },
+      h("span", { style: { display: "inline-block", fontSize: "13.5px", fontWeight: 700, color: C.green, background: C.greenSoft, border: `1.5px solid ${C.green}`, borderRadius: "9999px", padding: "8px 16px" } }, "👉 Смахивайте, чтобы листать блюда 👈")) : null
   ) : null;
 
   const dn = dayBase(ti);
