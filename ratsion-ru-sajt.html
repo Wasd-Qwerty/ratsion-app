@@ -1,4 +1,15 @@
 <title>Рацион РФ</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E6B4F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Рацион РФ">
+<link rel="manifest" href="manifest-ru.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon-32.png">
+<script>try{if('serviceWorker' in navigator && /(^|\.)github\.io$/i.test(location.hostname)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}}catch(e){}</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Onest:wght@400;500;600;700&display=swap');
 :root{
@@ -3629,6 +3640,71 @@ function screenDraft(D) {
 }
 
 /* ---------- экран: неделя ---------- */
+// поиск блюда и постановка его на конкретный день
+function screenFind(D) {
+  const { ALL } = D;
+  const week = state.week;
+  const sel = (state.findDish && state.findDish.day != null) ? state.findDish.day : todayIdx();
+  const q = (state.findQuery || "").toLowerCase().trim();
+  const results = q ? ALL.filter((d) => (d.n || "").toLowerCase().includes(q) && !isBanned(d.id)).slice(0, 40) : [];
+  const put = (d) => {
+    setWk({ overrides: { ...week.overrides, [`${sel}-${d.m}`]: d.id }, skipped: { ...week.skipped, [`${sel}-${d.m}`]: false } });
+    state.findDish = null; state.findQuery = ""; state.tab = "plan"; state.planDay = sel;
+    toast(`Поставили: ${d.n} — ${DAYS[sel]} (${MEALS[d.m]})`); render();
+  };
+  return h("div", { class: "inner" },
+    backLink("← Назад", () => { state.findDish = null; render(); }),
+    h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🔎 Найти блюдо"),
+    h("p", { style: { fontSize: "13px", margin: "0 0 12px", color: C.mute } }, "Выберите день, найдите блюдо — поставим его в меню, и всё пересчитается."),
+    h("div", { style: { display: "flex", gap: "6px", marginBottom: "12px" } },
+      DAYS_S.map((dn, di) => h("button", { onClick: () => { state.findDish = { day: di }; render(); },
+        style: { flex: 1, borderRadius: "10px", padding: "10px 0", fontSize: "13px", fontWeight: 700, textAlign: "center", background: di === sel ? C.green : C.card, color: di === sel ? "#fff" : C.green, border: `1.5px solid ${di === sel ? C.green : C.line}` } }, dn))),
+    h("input", { value: state.findQuery || "", placeholder: "🔍 Например: борщ, плов, сырники…", "data-fkey": "finddish",
+      onInput: (ev) => { state.findQuery = ev.target.value; render(); },
+      style: { width: "100%", borderRadius: "12px", padding: "12px 14px", fontSize: "16px", marginBottom: "14px", background: C.paper, border: `1.5px solid ${C.line}` } }),
+    results.length
+      ? h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+          results.map((d) => h("button", { onClick: () => put(d), style: { width: "100%", display: "flex", alignItems: "center", gap: "12px", borderRadius: "14px", padding: "12px 14px", background: C.card, border: `1px solid ${C.line}`, textAlign: "left" } },
+            h("span", { style: { fontSize: "26px", flexShrink: 0 } }, d.ic),
+            h("span", { style: { flex: 1, minWidth: 0 } },
+              h("span", { style: { display: "block", fontSize: "15px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, d.n),
+              h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, `${MEALS[d.m]} · ${d.t} мин`)),
+            h("span", { style: { fontSize: "13px", fontWeight: 700, color: C.green, flexShrink: 0 } }, "поставить →"))))
+      : h("div", { style: { fontSize: "14px", color: C.mute, textAlign: "center", padding: "30px 0" } }, q ? "Ничего не нашлось — попробуйте иначе." : "Начните вводить название блюда."),
+  );
+}
+function screenHistory(D) {
+  const weeks = state.savedWeeks || [];
+  return h("div", { class: "inner" },
+    backLink("← Неделя", () => { state.historyOpen = false; render(); }),
+    h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🕘 История меню"),
+    h("p", { style: { fontSize: "13px", margin: "0 0 16px", color: C.mute } }, "Сохранённые недели. «Повторить» — вернуть это меню на текущую неделю."),
+    h("div", { style: { marginBottom: "16px" } }, Btn("♡ Сохранить текущую неделю", () => { saveWeek(); })),
+    weeks.length
+      ? card(weeks.map((w, i) => h("div", { style: { padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", borderTop: i ? `1px solid ${C.line}` : "none" } },
+          h("span", { style: { flex: 1, minWidth: 0 } },
+            h("span", { style: { display: "block", fontSize: "15px", fontWeight: 600 } }, `Меню от ${w.savedAt}`),
+            h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, Object.keys(w.menu.overrides || {}).length ? "с правками" : "как собралось")),
+          h("button", { onClick: () => { state.historyOpen = false; state.tab = "plan"; restoreWeek(w.id); }, style: { fontSize: "13px", fontWeight: 700, color: "#fff", background: C.green, borderRadius: "9999px", padding: "8px 14px" } }, "↻ Повторить"),
+          h("button", { onClick: () => deleteWeek(w.id), style: { fontSize: "16px", padding: "0 4px", color: C.mute } }, "✕"))), { overflow: "hidden" })
+      : h("div", { style: { textAlign: "center", color: C.mute, padding: "40px 20px" } }, "Пока пусто. Сохраните понравившееся меню — и сможете вернуться к нему в один тап."),
+  );
+}
+// что стоит достать/замочить/замариновать с вечера под завтрашние блюда
+function prepAhead(di, ALL, slots) {
+  const FREEZE = new Set(["farsh", "svin_farsh", "kur_farsh", "farsh_ind", "file", "bedra", "kuritsa", "svinina", "govyadina", "baranina", "indeyka", "mintay", "treska", "gorbusha", "seld", "krevetki", "kupaty", "pelmeni", "kotlety", "sosiski", "kolbasa", "kur_krylya", "sardelki", "kalmary", "ryb_palochki"]);
+  const SOAK = new Set(["fasol", "nut", "gorox"]);
+  const day = slots[di] || {};
+  const ids = new Set();
+  Object.values(day).forEach((sl) => { if (sl.status !== "cook") return; const d = ALL.find((x) => x.id === sl.id); if (d) (d.i || []).forEach((it) => ids.add(Array.isArray(it) ? it[0] : it.id)); });
+  const namesOf = (set) => [...ids].filter((id) => set.has(id)).map((id) => P[id] && P[id].n).filter(Boolean);
+  const hints = [];
+  const fr = namesOf(FREEZE); if (fr.length) hints.push("🧊 Если заморожено — достаньте вечером: " + fr.slice(0, 4).map((x) => x.toLowerCase()).join(", "));
+  const sk = namesOf(SOAK); if (sk.length) hints.push("💧 Замочите на ночь: " + sk.map((x) => x.toLowerCase()).join(", "));
+  const marinate = Object.values(day).some((sl) => { if (sl.status !== "cook") return false; const d = ALL.find((x) => x.id === sl.id); return d && /шашлык|маринов|люл[яе]/i.test(d.n || ""); });
+  if (marinate) hints.push("🍢 Замаринуйте мясо с вечера");
+  return hints;
+}
 function screenToday(D) {
   const { ALL, res, dishCost, slots, servings, dayBase, share, dayCost } = D;
   const cfg = state.cfg, week = state.week;
@@ -3681,6 +3757,13 @@ function screenToday(D) {
     h("div", { style: { fontSize: "13px", marginBottom: "18px", color: C.mute } },
       cookN ? `Готовим ${cookN} ${(cookN % 10 === 1 && cookN % 100 !== 11) ? "блюдо" : (cookN % 10 >= 2 && cookN % 10 <= 4 && (cookN % 100 < 12 || cookN % 100 > 14)) ? "блюда" : "блюд"} · ${money(dayCost(ti))} за день` : "На сегодня готовки нет"),
     mealCards.length ? h("div", null, mealCards) : h("div", { style: { textAlign: "center", color: C.mute, padding: "36px 0" } }, "На сегодня всё едите не дома или пропущено."),
+    (() => {
+      const tmr = (ti + 1) % 7;
+      const prep = prepAhead(tmr, ALL, slots);
+      return prep.length ? h("div", { style: { borderRadius: "16px", padding: "14px 16px", marginBottom: "14px", background: C.amberSoft, border: `1px solid ${C.line}` } },
+        h("div", { style: { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.amber, fontWeight: 700, marginBottom: "7px" } }, `🌙 Достать заранее · на завтра (${DAYS[tmr]})`),
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "5px" } }, prep.map((t) => h("div", { style: { fontSize: "13.5px", color: C.ink, lineHeight: 1.4 } }, t)))) : null;
+    })(),
     nutriCard,
     h("div", { style: { display: "flex", gap: "10px", marginTop: "4px" } },
       h("button", { onClick: () => setTab("plan"), style: { flex: 1, borderRadius: "14px", padding: "14px", fontSize: "14px", fontWeight: 700, textAlign: "center", background: C.greenSoft, border: `1.5px solid ${C.green}`, color: C.green } }, "📅 Вся неделя →"),
@@ -3808,7 +3891,9 @@ function screenPlan(D) {
     h("div", { style: { display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" } },
       h("button", { onClick: saveWeek, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "♡ Сохранить"),
       h("button", { onClick: () => shareMenu(D), style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "⇪ Отправить"),
-      h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`)),
+      h("button", { onClick: () => { state.favoritesOpen = true; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, `❤️ Любимые${(cfg.favorites || []).length ? " · " + cfg.favorites.length : ""}`),
+      h("button", { onClick: () => { state.findDish = { day: sel }; state.findQuery = ""; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "🔎 Найти блюдо"),
+      h("button", { onClick: () => { state.historyOpen = true; render(); }, style: { fontSize: "13px", color: C.green, fontWeight: 700, background: C.greenSoft, border: `1px solid ${C.green}`, borderRadius: "9999px", padding: "8px 14px" } }, "🕘 История")),
     h("div", { style: { marginBottom: "14px" } },
       h("div", { style: { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.mute, marginBottom: "8px" } }, "Набор недели"),
       h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
@@ -3881,6 +3966,17 @@ function screenList(D) {
           ? `На кассе — за целые упаковки. ${list.homeCount} уже дома, минус ${money(list.saved)}.`
           : "«На кассе» — за целые упаковки; «съедите» — по факту, без остатков.")),
     catBlocks,
+    h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "16px", background: C.card, border: `1px solid ${C.line}`, boxShadow: C.cardShadow } },
+      h("div", { style: { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.mute, marginBottom: "10px" } }, "💳 Потрачено по факту"),
+      h("div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
+        h("input", { type: "number", inputmode: "numeric", value: week.spent || "", placeholder: "0", "data-fkey": "spentfact",
+          onInput: (ev) => setWk({ spent: Number(ev.target.value) || 0 }),
+          style: { width: "130px", borderRadius: "12px", padding: "10px 12px", fontSize: "16px", fontWeight: 700, textAlign: "right", background: C.paper, border: `1px solid ${C.line}` } }),
+        week.spent
+          ? (() => { const diff = week.spent - list.total; return h("span", { style: { marginLeft: "auto", textAlign: "right", fontSize: "13px" } },
+              h("span", { style: { display: "block", color: C.mute } }, `план ${money(list.total)}`),
+              h("span", { style: { display: "block", fontWeight: 700, color: diff > 0 ? C.red : C.green } }, diff > 0 ? `перерасход ${money(diff)}` : diff < 0 ? `экономия ${money(-diff)}` : "точно в план")); })()
+          : h("span", { style: { marginLeft: "auto", fontSize: "13px", color: C.mute } }, `план ${money(list.total)}`))),
     list.pantryCount > 0 ? h("div", { onClick: () => setTab("settings"), style: { fontSize: "13px", marginBottom: "16px", color: C.mute, textAlign: "center", cursor: "pointer" } },
       `${list.pantryCount} ${list.pantryCount === 1 ? "продукт" : "продуктов"} из кладовой не показаны · настроить →`) : null,
     h("div", { style: { marginBottom: "12px" } }, Btn("Отправить список", () => shareList(list))),
@@ -4097,7 +4193,7 @@ function screenSettings(D) {
         h("span", { style: { flex: 1, minWidth: 0 } },
           h("span", { style: { display: "block", fontSize: "15px" } }, `Меню от ${w.savedAt}`),
           h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, `${Object.keys(w.menu.overrides || {}).length ? "с правками" : "как собралось"}`)),
-        h("button", { onClick: () => restoreWeek(w.id), style: { fontSize: "13px", fontWeight: 600, color: C.green, borderRadius: "9999px", padding: "6px 12px", background: C.greenSoft } }, "Загрузить"),
+        h("button", { onClick: () => { state.tab = "plan"; restoreWeek(w.id); }, style: { fontSize: "13px", fontWeight: 600, color: C.green, borderRadius: "9999px", padding: "6px 12px", background: C.greenSoft } }, "↻ Повторить"),
         h("button", { onClick: () => deleteWeek(w.id), style: { fontSize: "14px", padding: "0 4px", color: C.mute } }, "✕"))), { marginBottom: "24px", overflow: "hidden" })
     : h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "24px", fontSize: "14px", background: C.card, border: `1px solid ${C.line}`, color: C.mute } }, "Понравилось меню на неделю — нажмите «♡ Сохранить неделю» на экране «Неделя», и оно появится здесь.");
 
@@ -4139,7 +4235,14 @@ function screenSettings(D) {
     h("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } },
       [["light", "Светлая"], ["dark", "Тёмная"], ["auto", "Авто"]].map(([v, l]) => h("button", { onClick: () => setTheme(v),
         style: { flex: 1, minWidth: 0, borderRadius: "14px", padding: "12px 4px", fontSize: "14px", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", background: (cfg.theme || "light") === v ? C.green : C.card, color: (cfg.theme || "light") === v ? "#fff" : C.ink, border: `1.5px solid ${(cfg.theme || "light") === v ? C.green : C.line}` } }, l))),
-    h("div", { style: { fontSize: "12px", marginBottom: "24px", color: C.mute } }, "«Авто» подстроится под тему телефона (тёмная вечером)."),
+    h("div", { style: { fontSize: "12px", marginBottom: "16px", color: C.mute } }, "«Авто» подстроится под тему телефона (тёмная вечером)."),
+    h("button", { onClick: () => setCfg({ ...cfg, bigText: !cfg.bigText }),
+      style: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", borderRadius: "14px", padding: "14px 16px", marginBottom: "24px", background: C.card, border: `1.5px solid ${cfg.bigText ? C.green : C.line}` } },
+      h("span", { style: { textAlign: "left" } },
+        h("span", { style: { display: "block", fontSize: "15px", fontWeight: 700 } }, "🔎 Крупный шрифт"),
+        h("span", { style: { display: "block", fontSize: "12px", color: C.mute, marginTop: "2px" } }, "Крупнее весь текст — удобно родителям")),
+      h("span", { style: { flexShrink: 0, width: "46px", height: "27px", borderRadius: "9999px", background: cfg.bigText ? C.green : C.line, position: "relative", transition: "background .15s" } },
+        h("span", { style: { position: "absolute", top: "3px", left: cfg.bigText ? "22px" : "3px", width: "21px", height: "21px", borderRadius: "9999px", background: "#fff", transition: "left .15s" } }))),
     eyebrow("Режим подбора"),
     h("div", { style: { display: "flex", gap: "8px", marginBottom: "8px" } },
       [["normal", "Обычный"], ["diet", "Диетический"]].map(([v, l]) => h("button", { onClick: () => setCfg({ ...cfg, mode: v }),
@@ -4234,6 +4337,8 @@ function view() {
   if (state.pantryOpen) return screenPantry();
   if (state.swap) return screenSwap(D);
   if (state.buyFix) return screenBuyFix(D);
+  if (state.findDish) return screenFind(D);
+  if (state.historyOpen) return screenHistory(D);
   if (state.favoritesOpen) return screenFavorites(D);
   if (state.freeRecipe) return screenFreeRecipe(D);
   if (state.surprise) return screenSurprise(D);
@@ -4247,7 +4352,7 @@ function view() {
   else if (state.tab === "list") screen = screenList(D);
   else if (state.tab === "prices") screen = screenPrices(D);
   else screen = screenSettings(D);
-  return h("div", null, h("div", { class: "inner" }, screen), toastNode(), nav(D));
+  return h("div", null, h("div", { class: "inner", style: state.cfg.bigText ? { zoom: 1.18 } : null }, screen), toastNode(), nav(D));
 }
 
 function render() {
