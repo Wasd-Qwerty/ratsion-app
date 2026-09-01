@@ -304,7 +304,20 @@ const SUBS = {
 const OPTIONAL = ["luk", "zelen", "chesnok", "izum", "goroshek", "med",
   "imbir", "gorchica", "uksus", "orehi", "suhofrukty", "limon", "salat", "redis"];
 
-const ALLERGENS = ["Молоко", "Яйца", "Глютен", "Рыба", "Морепродукты", "Орехи", "Соя"];
+const ALLERGENS = ["Молоко", "Яйца", "Глютен", "Рыба", "Морепродукты", "Орехи", "Арахис", "Соя", "Цитрусовые", "Мёд", "Шоколад", "Ягоды", "Грибы", "Помидоры", "Курица"];
+// какие продукты убирать под каждый аллерген (в дополнение к тегам P[id].a)
+const ALLERGEN_MAP = {
+  "молоко": ["moloko","kefir","smetana","syr","maslo_sl","yogurt","slivki","brynza","syr_tvor","tvorog","tvorog_o","yogurt_gr","ryazhenka","snezhok","tvor_massa","plavl_syr","syr_kosichka","slivoch_syr","ayran","maslo_topl","sguschenka","morozhenoe","syrok_glaz","smetana_z","smet_sous","mocarella","parmezan"],
+  "орехи": ["orehi"],
+  "арахис": ["arah_pasta"],
+  "цитрусовые": ["apelsin","limon","mandariny","grejpfrut"],
+  "мёд": ["med"],
+  "шоколад": ["shokolad","kakao"],
+  "ягоды": ["klubnika","yagody","chereshnya","vinograd","granat"],
+  "грибы": ["griby"],
+  "помидоры": ["pomidor","tomat","sok_tomat","ketchup","adzhika"],
+  "курица": ["kuritsa","file","bedra","kur_krylya","kur_farsh"],
+};
 const EQUIP = ["Плита", "Духовка", "Микроволновка", "Мультиварка", "Блендер", "Пароварка", "Аэрогриль", "Гриль", "Вафельница", "Мясорубка", "Хлебопечка", "Сушилка", "Соковыжималка", "Тостер", "Йогуртница", "Фритюрница"];
 const DAYS = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
 const DAYS_S = ["ПН","ВТ","СР","ЧТ","ПТ","СБ","ВС"];
@@ -982,7 +995,12 @@ const cost = (items, prices) => items.reduce((s, [id, q]) => s + (prices[id]?.p 
 
 function fits(d, cfg) {
   const al = cfg.allergens.map((a) => a.toLowerCase());
-  for (const [id] of d.i) if (P[id].a?.some((a) => al.includes(a))) return false;
+  const banned = new Set();
+  al.forEach((a) => (ALLERGEN_MAP[a] || []).forEach((pid) => banned.add(pid)));
+  for (const [id] of d.i) {
+    if (P[id].a?.some((a) => al.includes(a))) return false;
+    if (banned.has(id)) return false;
+  }
   if (!d.eq.every((e) => cfg.equip.includes(e))) return false;
   return resolve(d, cfg.eaters).ok;
 }
