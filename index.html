@@ -7,6 +7,17 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon-32.png">
 <title>Рацион — планировщик меню</title>
+<script>
+  // Запомненный выбор страны: открываем сразу нужную версию, не спрашивая заново.
+  // Чтобы снова выбрать страну — открыть index.html?choose
+  try {
+    if (location.search.indexOf("choose") === -1) {
+      var ed = localStorage.getItem("ratsion:edition");
+      if (ed === "ru") location.replace("ratsion-ru-sajt.html");
+      else if (ed === "kz") location.replace("ratsion-sajt.html");
+    }
+  } catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
@@ -40,7 +51,7 @@
     <h1>Рацион</h1>
     <p class="sub">Планировщик меню на неделю под бюджет и КБЖУ.<br>Выберите свою страну — цены и магазины уже настроены.</p>
 
-    <a class="card ru" href="ratsion-ru-sajt.html">
+    <a class="card ru" href="ratsion-ru-sajt.html" onclick="try{localStorage.setItem('ratsion:edition','ru')}catch(e){}">
       <div class="row">
         <span class="flag">🇷🇺</span>
         <span>
@@ -51,7 +62,7 @@
       </div>
     </a>
 
-    <a class="card" href="ratsion-sajt.html">
+    <a class="card" href="ratsion-sajt.html" onclick="try{localStorage.setItem('ratsion:edition','kz')}catch(e){}">
       <div class="row">
         <span class="flag">🇰🇿</span>
         <span>
