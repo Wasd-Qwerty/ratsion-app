@@ -3679,7 +3679,7 @@ function screenToday(D) {
       h("h2", { class: "disp", style: { fontSize: "26px", margin: 0 } }, "☀️ Сегодня"),
       h("span", { class: "disp", style: { fontSize: "15px", color: C.green, fontWeight: 700 } }, DAYS[ti])),
     h("div", { style: { fontSize: "13px", marginBottom: "18px", color: C.mute } },
-      cookN ? `Готовим ${cookN} ${cookN === 1 ? "блюдо" : "блюда"} · ${money(dayCost(ti))} за день` : "На сегодня готовки нет"),
+      cookN ? `Готовим ${cookN} ${(cookN % 10 === 1 && cookN % 100 !== 11) ? "блюдо" : (cookN % 10 >= 2 && cookN % 10 <= 4 && (cookN % 100 < 12 || cookN % 100 > 14)) ? "блюда" : "блюд"} · ${money(dayCost(ti))} за день` : "На сегодня готовки нет"),
     mealCards.length ? h("div", null, mealCards) : h("div", { style: { textAlign: "center", color: C.mute, padding: "36px 0" } }, "На сегодня всё едите не дома или пропущено."),
     nutriCard,
     h("div", { style: { display: "flex", gap: "10px", marginTop: "4px" } },
