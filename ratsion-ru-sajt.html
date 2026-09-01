@@ -4023,6 +4023,7 @@ function screenList(D) {
 function screenPrices(D) {
   const { k, prices, stale } = D;
   const cfg = state.cfg;
+  const real = !!STORES.find((x) => x.id === cfg.store)?.real;
   const q = (state.priceSearch || "").toLowerCase().trim();
   const rows = Object.entries(P)
     .filter(([id, pr]) => !q || pr.n.toLowerCase().includes(q))
@@ -4050,7 +4051,11 @@ function screenPrices(D) {
       return h("div", { style: { display: "flex", alignItems: "center", gap: "8px", borderRadius: "12px", padding: "10px 14px", marginBottom: "16px", background: real ? C.greenSoft : C.amberSoft, border: `1px solid ${real ? C.green : "#F0DDB4"}` } },
         h("span", { style: { fontSize: "16px" } }, real ? "✓" : "≈"),
         h("span", { style: { fontSize: "12.5px", lineHeight: 1.4, color: real ? C.green : C.ink } },
-          real ? "Реальные цены — собраны с сайта магазина." : "Примерная оценка. Реально собран только опорный магазин — другие сети закрывают массовый сбор цен. Впишите свои цены после похода, и приложение их запомнит."));
+          real
+            ? (k === 1
+                ? "Реальные цены — собраны с сайта магазина."
+                : "Основные продукты — реальные цены с сайта магазина. Редкие позиции — примерная оценка, впишите свои после похода.")
+            : "Примерная оценка. Реально собран только опорный магазин — другие сети закрывают массовый сбор цен. Впишите свои цены после похода, и приложение их запомнит."));
     })(),
     h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" } }, STORES.map((st) => Chip(st.n + (st.real ? " ✓" : " ≈"), cfg.store === st.id, () => setCfg({ ...cfg, store: st.id })))),
     h("div", { style: { position: "relative", marginBottom: "16px" } },
@@ -4058,7 +4063,7 @@ function screenPrices(D) {
         onInput: (ev) => { state.priceSearch = ev.target.value; render(); },
         style: { width: "100%", borderRadius: "12px", padding: "12px 14px", fontSize: "15px", background: C.paper, border: `1.5px solid ${C.line}` } }),
       q ? h("button", { onClick: () => { state.priceSearch = ""; render(); }, style: { position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "16px", color: C.mute, padding: "4px 8px" } }, "✕") : null),
-    k !== 1 ? h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "20px", fontSize: "14px", background: C.amberSoft } }, `Цены пересчитаны от цен Ленты коэффициентом ${k}. Поправите здесь — приложение запомнит и пересчитает остальные магазины.`) : null,
+    (!real && k !== 1) ? h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "20px", fontSize: "14px", background: C.amberSoft } }, `Цены — примерная оценка от реального Магнита коэффициентом ${k}. Поправьте здесь после похода — приложение запомнит и пересчитает остальное.`) : null,
     stale > 0 ? h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "20px", fontSize: "14px", background: C.amberSoft } }, `${stale} цен не обновлялись больше месяца — они вверху списка.`) : null,
     h("button", { onClick: () => { state.priceImportOpen = !state.priceImportOpen; render(); },
       style: { fontSize: "14px", color: C.green, fontWeight: 500, marginBottom: "12px" } }, state.priceImportOpen ? "Скрыть вставку списком" : "Обновить цены списком ▾"),
