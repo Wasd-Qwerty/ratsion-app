@@ -3262,6 +3262,8 @@ function screenFreeRecipe(D) {
     ? ["← Другой сюрприз", () => { state.freeRecipe = null; state.surprise = true; render(); }]
     : fr.back === "favorites"
     ? ["← Любимые", () => { state.freeRecipe = null; state.favoritesOpen = true; render(); }]
+    : fr.back === "find"
+    ? ["← К поиску", () => { state.freeRecipe = null; state.findDish = { day: (fr.addDay != null ? fr.addDay : todayIdx()) }; render(); }]
     : ["← Неделя", () => setFreeRecipe(null)];
   const fav = isFav(d.id), banned = isBanned(d.id);
   const eq = (d.eq && d.eq.length) ? d.eq.join(" · ") : "без техники";
@@ -3283,6 +3285,20 @@ function screenFreeRecipe(D) {
   const favRow = h("div", { style: { display: "flex", gap: "8px", marginBottom: "20px" } },
     h("button", { onClick: () => toggleFav(d.id), style: { flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600, background: fav ? C.greenSoft : C.card, color: fav ? C.green : C.mute, border: `1.5px solid ${fav ? C.green : C.line}` } }, fav ? "❤️ Любимое" : "♡ В любимые"),
     h("button", { onClick: () => toggleBan(d.id), style: { flex: 1, borderRadius: "12px", padding: "10px", fontSize: "14px", fontWeight: 600, background: banned ? C.dangerSoft : C.card, color: banned ? C.red : C.mute, border: `1.5px solid ${banned ? C.red : C.line}` } }, banned ? "🚫 Скрыто" : "🚫 Не предлагать"));
+  const addDaySel = (fr.addDay != null) ? fr.addDay : todayIdx();
+  const doAddMenu = () => {
+    const wk = state.week;
+    setWk({ overrides: { ...wk.overrides, [`${addDaySel}-${d.m}`]: d.id }, skipped: { ...wk.skipped, [`${addDaySel}-${d.m}`]: false } });
+    state.freeRecipe = null; state.findDish = null; state.surprise = false; state.tab = "plan"; state.planDay = addDaySel;
+    toast(`Добавлено в меню: ${d.n} — ${DAYS[addDaySel]} (${MEALS[d.m]})`); render();
+  };
+  const addMenuBlock = h("div", { style: { borderRadius: "16px", padding: "16px", marginBottom: "28px", background: C.greenSoft, border: `1.5px solid ${C.green}` } },
+    h("div", { style: { fontSize: "15px", fontWeight: 700, color: C.green, marginBottom: "4px" } }, "➕ Добавить в меню"),
+    h("div", { style: { fontSize: "12px", color: C.mute, marginBottom: "10px" } }, `Выберите день — блюдо встанет на ${MEALS[d.m].toLowerCase()}, всё пересчитается.`),
+    h("div", { style: { display: "flex", gap: "6px", marginBottom: "12px" } },
+      DAYS_S.map((dn, di) => h("button", { onClick: () => { if (state.freeRecipe) state.freeRecipe.addDay = di; render(); },
+        style: { flex: 1, borderRadius: "10px", padding: "9px 0", fontSize: "13px", fontWeight: 700, textAlign: "center", background: di === addDaySel ? C.green : C.card, color: di === addDaySel ? "#fff" : C.green, border: `1.5px solid ${di === addDaySel ? C.green : C.line}` } }, dn))),
+    Btn(`＋ Поставить на ${DAYS[addDaySel]}`, doAddMenu));
   return h("div", { class: "inner" },
     backLink(back[0], back[1]),
     h("div", { style: { fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.14em", color: C.green, marginBottom: "8px" } }, MEALS[d.m] + " · " + eq),
@@ -3302,7 +3318,8 @@ function screenFreeRecipe(D) {
     card([...ingRows, ...hidIngRows(d, d.i.map((x) => x[0]))], { marginBottom: "10px", overflow: "hidden" }),
     h("div", { style: { fontSize: "13px", marginBottom: "24px", color: C.mute, borderRadius: "12px", padding: "10px 14px", background: C.amberSoft } }, "🧂 Соль, перец, специи и зелень — по вкусу (в список покупок и КБЖУ не считаем)."),
     h("h3", { style: { fontWeight: 600, margin: "0 0 12px" } }, "Приготовление"),
-    h("div", { style: { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "32px" } }, steps),
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" } }, steps),
+    addMenuBlock,
   );
 }
 
@@ -3632,10 +3649,11 @@ function screenFind(D) {
   const sel = (state.findDish && state.findDish.day != null) ? state.findDish.day : todayIdx();
   const q = (state.findQuery || "").toLowerCase().trim();
   const results = q ? ALL.filter((d) => (d.n || "").toLowerCase().includes(q) && !isBanned(d.id)).slice(0, 40) : [];
-  const put = (d) => {
-    setWk({ overrides: { ...week.overrides, [`${sel}-${d.m}`]: d.id }, skipped: { ...week.skipped, [`${sel}-${d.m}`]: false } });
-    state.findDish = null; state.findQuery = ""; state.tab = "plan"; state.planDay = sel;
-    toast(`Поставили: ${d.n} — ${DAYS[sel]} (${MEALS[d.m]})`); render();
+  const openR = (d) => {
+    state.findDish = null;
+    state.freeRecipe = { id: d.id, missing: [], back: "find", addDay: sel };
+    state.uniqueOpen = false; state.favoritesOpen = false;
+    render();
   };
   return h("div", { class: "inner" },
     backLink("← Назад", () => { state.findDish = null; render(); }),
@@ -3649,12 +3667,12 @@ function screenFind(D) {
       style: { width: "100%", borderRadius: "12px", padding: "12px 14px", fontSize: "16px", marginBottom: "14px", background: C.paper, border: `1.5px solid ${C.line}` } }),
     results.length
       ? h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
-          results.map((d) => h("button", { onClick: () => put(d), style: { width: "100%", display: "flex", alignItems: "center", gap: "12px", borderRadius: "14px", padding: "12px 14px", background: C.card, border: `1px solid ${C.line}`, textAlign: "left" } },
+          results.map((d) => h("button", { onClick: () => openR(d), style: { width: "100%", display: "flex", alignItems: "center", gap: "12px", borderRadius: "14px", padding: "12px 14px", background: C.card, border: `1px solid ${C.line}`, textAlign: "left" } },
             h("span", { style: { fontSize: "26px", flexShrink: 0 } }, d.ic),
             h("span", { style: { flex: 1, minWidth: 0 } },
               h("span", { style: { display: "block", fontSize: "15px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, d.n),
               h("span", { style: { display: "block", fontSize: "12px", color: C.mute } }, `${MEALS[d.m]} · ${d.t} мин`)),
-            h("span", { style: { fontSize: "13px", fontWeight: 700, color: C.green, flexShrink: 0 } }, "поставить →"))))
+            h("span", { style: { fontSize: "18px", color: C.mute, flexShrink: 0 } }, "›"))))
       : h("div", { style: { fontSize: "14px", color: C.mute, textAlign: "center", padding: "30px 0" } }, q ? "Ничего не нашлось — попробуйте иначе." : "Начните вводить название блюда."),
   );
 }
