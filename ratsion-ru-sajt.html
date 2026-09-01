@@ -9,7 +9,18 @@
 <link rel="manifest" href="manifest-ru.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon-32.png">
-<script>try{if('serviceWorker' in navigator && /(^|\.)github\.io$/i.test(location.hostname)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}}catch(e){}</script>
+<script>try{if('serviceWorker' in navigator && /(^|\.)github\.io$/i.test(location.hostname)){
+  var _refreshing=false;
+  if(navigator.serviceWorker.controller){ // уже управляется — значит новая версия = обновление, перезагружаем сами
+    navigator.serviceWorker.addEventListener('controllerchange',function(){ if(_refreshing)return; _refreshing=true; location.reload(); });
+  }
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      try{reg.update();}catch(e){}
+      setInterval(function(){ try{reg.update();}catch(e){} },30*60*1000);
+    }).catch(function(){});
+  });
+}}catch(e){}</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Onest:wght@400;500;600;700&display=swap');
 :root{
