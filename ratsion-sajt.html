@@ -822,12 +822,12 @@ const KZT_RUB = 5.4;   // курс на август 2026
 /* Магазины. Цены вы задаёте один раз для базового магазина,
    для остальных они пересчитываются коэффициентом.            */
 const STORES = [
-  { id: "magnum",  n: "Magnum",        d: "гипермаркет",     k: 1.00 },
-  { id: "small",   n: "Small",         d: "у дома",          k: 1.08 },
-  { id: "metro",   n: "Metro",         d: "опт, большие упаковки", k: 0.95 },
-  { id: "bazar",   n: "Зелёный базар", d: "овощи и мясо",    k: 0.86 },
-  { id: "arbuz",   n: "Arbuz.kz",      d: "доставка",        k: 1.12 },
-  { id: "galmart", n: "Galmart",       d: "премиум",         k: 1.30 },
+  { id: "magnum",  n: "Magnum",        d: "опорные цены",     k: 1.00, real: true },
+  { id: "small",   n: "Small",         d: "≈ примерная оценка", k: 1.08 },
+  { id: "metro",   n: "Metro",         d: "≈ примерная оценка", k: 0.95 },
+  { id: "bazar",   n: "Зелёный базар", d: "≈ примерная оценка", k: 0.86 },
+  { id: "arbuz",   n: "Arbuz.kz",      d: "≈ примерная оценка", k: 1.12 },
+  { id: "galmart", n: "Galmart",       d: "≈ примерная оценка", k: 1.30 },
 ];
 const storeK = (id) => (STORES.find((x) => x.id === id) || STORES[0]).k;
 const nf = (v) => new Intl.NumberFormat("ru-RU").format(Math.round(v));
@@ -4008,8 +4008,15 @@ function screenPrices(D) {
 
   return [
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🏷️ Цены"),
-    h("div", { style: { fontSize: "14px", marginBottom: "16px", color: C.mute } }, `Цены магазина «${STORES.find((x) => x.id === cfg.store)?.n}». Правьте после похода — меню и список пересчитаются сами.`),
-    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" } }, STORES.map((st) => Chip(st.n, cfg.store === st.id, () => setCfg({ ...cfg, store: st.id })))),
+    h("div", { style: { fontSize: "14px", marginBottom: "12px", color: C.mute } }, `Цены магазина «${STORES.find((x) => x.id === cfg.store)?.n}». Правьте после похода — меню и список пересчитаются сами.`),
+    (() => {
+      const real = !!STORES.find((x) => x.id === cfg.store)?.real;
+      return h("div", { style: { display: "flex", alignItems: "center", gap: "8px", borderRadius: "12px", padding: "10px 14px", marginBottom: "16px", background: real ? C.greenSoft : C.amberSoft, border: `1px solid ${real ? C.green : "#F0DDB4"}` } },
+        h("span", { style: { fontSize: "16px" } }, real ? "✓" : "≈"),
+        h("span", { style: { fontSize: "12.5px", lineHeight: 1.4, color: real ? C.green : C.ink } },
+          real ? "Реальные цены — собраны с сайта магазина." : "Примерная оценка. Реально собран только опорный магазин — другие сети закрывают массовый сбор цен. Впишите свои цены после похода, и приложение их запомнит."));
+    })(),
+    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" } }, STORES.map((st) => Chip(st.n + (st.real ? " ✓" : " ≈"), cfg.store === st.id, () => setCfg({ ...cfg, store: st.id })))),
     h("div", { style: { position: "relative", marginBottom: "16px" } },
       h("input", { value: state.priceSearch, placeholder: "🔍 Найти продукт…", "data-fkey": "pricesearch",
         onInput: (ev) => { state.priceSearch = ev.target.value; render(); },

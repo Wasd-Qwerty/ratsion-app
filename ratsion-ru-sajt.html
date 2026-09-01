@@ -825,13 +825,13 @@ const STORES = [
   // База цен = реальные цены Магнита (сверены 1 сентября 2026 через сайт magnit.ru).
   // У Магнита коэффициент 1.00 — цены как есть, без наценки. Остальные сети — оценка
   // относительно Магнита (реальных цен по каждому из них онлайн не достать).
-  { id: "magnit",      n: "Магнит",      d: "реальные цены, сверены 1 сент", k: 1.00 },
-  { id: "chizhik",     n: "Чижик",       d: "жёсткий дискаунтер, дешевле", k: 0.88 },
-  { id: "auchan",      n: "Ашан",        d: "гипермаркет, дешевле", k: 0.94 },
-  { id: "lenta",       n: "Лента",       d: "гипермаркет",     k: 0.96 },
-  { id: "pyaterochka", n: "Пятёрочка",  d: "у дома",          k: 1.01 },
-  { id: "perekrestok", n: "Перекрёсток", d: "супермаркет",     k: 1.09 },
-  { id: "vkusvill",    n: "ВкусВилл",    d: "фермерский, дороже", k: 1.23 },
+  { id: "magnit",      n: "Магнит",      d: "реальные цены, сверены", k: 1.00, real: true },
+  { id: "chizhik",     n: "Чижик",       d: "≈ примерная оценка", k: 0.88 },
+  { id: "auchan",      n: "Ашан",        d: "≈ примерная оценка", k: 0.94 },
+  { id: "lenta",       n: "Лента",       d: "≈ примерная оценка", k: 0.96 },
+  { id: "pyaterochka", n: "Пятёрочка",  d: "≈ примерная оценка", k: 1.01 },
+  { id: "perekrestok", n: "Перекрёсток", d: "≈ примерная оценка", k: 1.09 },
+  { id: "vkusvill",    n: "ВкусВилл",    d: "≈ примерная оценка", k: 1.23 },
 ];
 const storeK = (id) => (STORES.find((x) => x.id === id) || STORES[0]).k;
 const nf = (v) => new Intl.NumberFormat("ru-RU").format(Math.round(v));
@@ -4023,8 +4023,15 @@ function screenPrices(D) {
 
   return [
     h("h2", { class: "disp", style: { fontSize: "24px", margin: "0 0 4px" } }, "🏷️ Цены"),
-    h("div", { style: { fontSize: "14px", marginBottom: "16px", color: C.mute } }, `Цены магазина «${STORES.find((x) => x.id === cfg.store)?.n}». Правьте после похода — меню и список пересчитаются сами.`),
-    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" } }, STORES.map((st) => Chip(st.n, cfg.store === st.id, () => setCfg({ ...cfg, store: st.id })))),
+    h("div", { style: { fontSize: "14px", marginBottom: "12px", color: C.mute } }, `Цены магазина «${STORES.find((x) => x.id === cfg.store)?.n}». Правьте после похода — меню и список пересчитаются сами.`),
+    (() => {
+      const real = !!STORES.find((x) => x.id === cfg.store)?.real;
+      return h("div", { style: { display: "flex", alignItems: "center", gap: "8px", borderRadius: "12px", padding: "10px 14px", marginBottom: "16px", background: real ? C.greenSoft : C.amberSoft, border: `1px solid ${real ? C.green : "#F0DDB4"}` } },
+        h("span", { style: { fontSize: "16px" } }, real ? "✓" : "≈"),
+        h("span", { style: { fontSize: "12.5px", lineHeight: 1.4, color: real ? C.green : C.ink } },
+          real ? "Реальные цены — собраны с сайта магазина." : "Примерная оценка. Реально собран только опорный магазин — другие сети закрывают массовый сбор цен. Впишите свои цены после похода, и приложение их запомнит."));
+    })(),
+    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" } }, STORES.map((st) => Chip(st.n + (st.real ? " ✓" : " ≈"), cfg.store === st.id, () => setCfg({ ...cfg, store: st.id })))),
     h("div", { style: { position: "relative", marginBottom: "16px" } },
       h("input", { value: state.priceSearch, placeholder: "🔍 Найти продукт…", "data-fkey": "pricesearch",
         onInput: (ev) => { state.priceSearch = ev.target.value; render(); },
