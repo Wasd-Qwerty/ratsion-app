@@ -1,4 +1,4 @@
-const CACHE = 'ratsion-v2';
+const CACHE = 'ratsion-v3';
 const ASSETS = ['./', 'index.html', 'ratsion-ru-sajt.html', 'ratsion-sajt.html',
   'manifest-ru.json', 'manifest-kz.json', 'icon-192.png', 'icon-512.png',
   'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
